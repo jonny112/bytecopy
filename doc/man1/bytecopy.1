@@ -1,0 +1,167 @@
+.TH BYTECOPY 1 "August 2021" UNIX "User Commands"
+.SH NAME
+bytecopy \- copy bytes between files
+.SH SYNOPSIS
+.B bytecopy
+[\fIOPTION\fR]... [\fISTART\fR] [\fIEND\fR|+\fILENGTH\fR]
+.SH DESCRIPTION
+Copy arbitrary ranges of bytes from one file to another or between different locations in the same file.
+.br
+Extracting a segment to a new file is possible as well as updating a segment within an existing file.
+.br
+A file means any regular or special file or open file descriptor on which read or write operations may be performed.
+.PP
+\fISTART\fR is the zero-based offset of the first byte to copy, counted from the beginning of the input file.
+.br
+If not specified, no seek operation will be performed on the input (see also -s).
+.PP
+\fIEND\fR is the zero-based offset of the byte at which the copy process shall end, counted from the beginning of the input file.
+The addressed byte is the first not to be copied and therefore may lay after the last byte in the file.
+.br
+If not specified, the copy operation is unbounded and will continue until the end of input.
+.br
+Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing is copied, but must not be smaller than START.
+.PP
+\fILENGTH\fR is the number of bytes to be copied, prefixed with a '+' (plus sign).
+It may be specified alternatively to END, while the corresponding value for END is calculated by adding LENGTH to START.
+.PP
+Passing a '-' (dash) in place of START or END is equivalent to omitting them.
+.br
+When START is omitted, END is equivalent to LENGTH.
+.PP
+Numbers (N) may be specified as
+.IP
+N    decimal      (e.g. 1024)
+.br
+0N   octal        (e.g. 02000)
+.br
+0xN  hexadecimal  (e.g. 0x400)
+.PP
+A number may be followed by one of the following factor suffixes:
+.IP
+K    1024
+.br
+M    1024 * 1024
+.br
+G    1024 * 1024 * 1024
+.SS Index
+Instead of specifying the values for START or END directly, they may be read from an index. The index is an array of unsigned 64-bit (8-byte) integers, read from file descriptor 3 by default, see -X. Index files must be seekable.
+.PP
+If you specify a zero-based array position prefixed with an '*' (asterisk) for START or END the respective value from the index will be used in its place.
+.PP
+As a shorthand for extracting the range between two adjacent index entries the position of the range prefixed with a '^' (caret) may be passed for START, overriding END.
+.br
+The range index is derived as follows (example for an index with three entries):
+.IP
+<start of file> ^0 <first entry> ^1 <second entry> ^2 <third entry> ^3 <end of file>
+.SH OPTIONS
+.TP
+.B \-b \fISIZE
+Set the number of bytes to be buffered during one read/write cycle. The default is 512K = 524288 bytes.
+.br
+If the total number of bytes to copy is known and smaller than SIZE, the buffer will be automatically decreased to the required length.
+.TP
+.B \-B
+Always fill the entire buffer before writing, unless END or the end of input has been reached.
+.br
+Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output immediately.
+.br
+Partial reads may occur when reading form remote resources or terminals but usually are of no concern for regular files and local storage devices.
+.TP
+.B \-e
+Write the final buffer even if it is empty. That is, perform a write operation even if the byte count is zero.
+This has no effect on regular files, but may have on certain devices.
+.TP
+.B \-E
+In case the number of bytes to copy is specified (END or LENGTH given), do not consider a premature end of input an error.
+.br
+Otherwise, an error is reported if not all bytes could be read.
+.TP
+.B \-h
+Print options and usage summary, then exit.
+.TP
+.B \-i \fIFILE
+Open FILE for reading and use it as input instead of the standard input. This overrides -I.
+.TP
+.B \-I \fIFD
+Read input from file descriptor FD instead of the standard input.
+.TP
+.B \-o \fIFILE
+Open FILE for writing and use it as output instead of the standard output. This overrides -O.
+.br
+If the file does not exist it will be created.
+.br
+Unless -w is used, an attempt will be made to seek to the end of the file before writing.
+.TP
+.B \-O \fIFD
+Write output to file descriptor FD instead of the standard output.
+.TP
+.B \-q
+Be quiet. Do not output progress.
+.br
+By default, read/write statistics are printed to standard error after each read operation.
+.TP
+.B \-Q
+Be more quiet. Do not print any progress or status messages, only errors, to standard error.
+.TP
+.B \-s
+Skip input instead of seeking. That is, read and discard as many bytes form the input as necessary to reach START instead of directly seeking to that position.
+.br
+This should only be used if the input is not seekable and cannot be accessed by other means.
+.TP
+.B \-w POS
+Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write, counted from the beginning of the output file.
+.br
+Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the file regardless of a previous seek. So, for this to work correctly you need to either open the output file using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
+.br
+Seeking to a position beyond the end of a file is legit and the gap will be filled with zero-bytes upon first write. Advanced file systems are able to accomplish this logically without using up physical disk space until something is actually written to the gap.
+.br
+Passing a '-' (dash) for POS prevents any seek operation on the output, see -o.
+.TP
+.B \-x OFFSET
+Use an offset for reading index values. Where OFFSET is a zero-based byte position counted form the beginning of the index file pointing to the first index entry.
+.TP
+.B \-X FD
+Read index values from file descriptor FD instead of the default 3.
+.SH EXAMPLES
+Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
+.IP
+bytecopy 1000 1300 < source.file > new.file
+.PP
+or equivalently:
+.IP
+bytecopy -i source.file 1000 1300 > new.file
+.PP
+or equivalently:
+.IP
+bytecopy -i source.file 1000 +300 > new.file
+.PP
+Copy 1048576 bytes of random data to a file:
+.br
+Repeating this command will append one more megabyte to the output file each time.
+.IP
+bytecopy -o output.file - 1M < /dev/urandom
+.PP
+Update contents of a file:
+.IP
+echo "Hello World!" > some.file
+.br
+echo -n "Earth" | bytecopy -o some.file -w 6
+.PP
+or more safely, specifying the field length:
+.IP
+echo "Earth" | bytecopy -o some.file -w 6 - 5
+.PP
+Extract the segment between the second and the third index entry:
+.br
+Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte offsets 8 and 16 in the index file, respectively.
+.IP
+bytecopy -i big.file *1 *2 3<big.file.idx > segment.file
+.PP
+or equivalently:
+.IP
+bytecopy -i big.file ^2 3<big.file.idx > segment.file
+.SH AUTHOR
+Written by Johannes Schmitz
+.SH SOURCE
+git://github.com/jonny112/bytecopy.git
