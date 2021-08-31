@@ -6,7 +6,7 @@ Extracting a segment to a new file is possible as well as updating a segment wit
 ```sh
 bytecopy [OPTIONS] [START] [END|+LENGTH]
 ```
-See [manpage](blob/main/doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.
+See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.
 
 ## Installation
 
