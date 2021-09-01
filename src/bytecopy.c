@@ -85,9 +85,9 @@ void printStats(struct ioStats *io, char lineEnd) {
 int main(int argc, char **argv) {
     uint8_t *buffer;
     uint64_t n, pos = 0, posStart = 0, total, posIdx = 0, posWrite, posEnd;
-    bool bEnd = false, bStatus = true, bFlush = true, bIgnEnd = false, bWrEmpty = false;
+    bool bEnd = false, bInSeek = true, bStatus = true, bFlush = true, bIgnEnd = false, bWrEmpty = false;
     int opt, fdIn = 0, fdOut = 1, fdIdx = 3, rd, wr, rq, bufferLen = BUFFER_DEFAULT, bufferPos;
-    char *pathIn = NULL, *pathOut = NULL, cInSeek = 0, cOutSeek = 0, cProg = 0;
+    char *pathIn = NULL, *pathOut = NULL, cOutSeek = 0, cProg = 0;
     struct ioStats io = {0, 0, 0, 0};
     
     // parse options
@@ -100,23 +100,23 @@ int main(int argc, char **argv) {
                 "\n"
                 "    -b SIZE     set I/O buffer size (default: 512K)\n"
                 "    -B          force buffering, do not write output after each read\n"
-                "    -e          write final buffer if empty\n"
+                "    -e          write final buffer even if empty\n"
                 "    -E          do not consider premature end of input an error\n"
                 "    -h          print this help and exit\n"
                 "    -i FILE     open FILE for input instead of reading from standard input (overrides -I)\n"
                 "    -I FD       read from a different file descriptor (default: standard input)\n"
                 "    -o FILE     open FILE for output instead of writing to standard output (overrides -O)\n"
                 "    -O FD       write to a different file descriptor (default: standard output)\n"
-                "    -q          don't print progress to stderr\n"
-                "    -Q          print no status, only errors to stderr\n"
-                "    -s          skip (read/discard) input up to START position instead of seeking\n"
+                "    -q          don't print progress to standard error\n"
+                "    -Q          print no status, only errors to standard error\n"
+                "    -s          skip (read/discard) input up to START instead of seeking\n"
                 "    -w POS      seek to POS in output before writing (you will want to use -o or 1<> with this)\n"
                 "    -x OFFSET   use OFFSET when reading index values\n"
                 "    -X FD       read index values from a different file descriptor (default: 3)\n"
                 "\n"
                 "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
                 "LENGTH is a byte count added to START to obtain END.\n"
-                "Subtracting END form START yields the total number of bytes to be copied.\n"
+                "Subtracting END form START yields the total number of bytes to copy.\n"
                 "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
                 "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
                 "\n"
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
             bStatus = false;
         } else if (opt == 's') {
             // don't seek in input
-            cInSeek = -1;
+            bInSeek = false;
         } else if (opt == 'w') {
             // seek in output
             if (optarg[0] == '-') {
@@ -208,10 +208,10 @@ int main(int argc, char **argv) {
             // end
             switch (readIdx(fdIdx, posIdx, n, &posEnd)) {
                 case 0:
+                    bEnd = true;
                     break;
                 case 1:
                     // last/unbound
-                    bEnd = false;
                     break;
                 default:
                     return 1;
@@ -226,8 +226,7 @@ int main(int argc, char **argv) {
                     // direct
                     if (parseNum(argv[optind], &posStart)) return 1;
                 }
-                if (cInSeek == 0) cInSeek = 1;
-            }
+            } else bInSeek = false;
             
             // end
             if (argc > ++optind && argv[optind][0] != '-') {
@@ -261,11 +260,11 @@ int main(int argc, char **argv) {
     // prep input
     if (pathIn != NULL) {
         if ((fdIn = open(pathIn, O_RDONLY)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open input: %s: %s", pathIn, strerror(errno));
+            fprintf(stderr, "bytecopy: failed to open input: %s: %s\n", pathIn, strerror(errno));
             return 1;
         }
     }
-    if (cInSeek == 1) {
+    if (bInSeek) {
         if (seek(fdIn, &posStart, "input")) return 1;
         pos = posStart;
     }
@@ -273,7 +272,7 @@ int main(int argc, char **argv) {
     // prep output
     if (pathOut != NULL) {
         if ((fdOut = open(pathOut, O_WRONLY | O_CREAT, 0666)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open output: %s: %s", pathOut, strerror(errno));
+            fprintf(stderr, "bytecopy: failed to open output: %s: %s\n", pathOut, strerror(errno));
             return 1;
         }
     }
@@ -287,17 +286,17 @@ int main(int argc, char **argv) {
     if (bStatus) {
         fprintf(stderr, "bytecopy: ");
         if (posStart > pos) fprintf(stderr, "..");
-        if (cInSeek == 1 || posStart > 0) fprintf(stderr, "%" PRIu64, posStart);
+        if (bInSeek || posStart > 0) fprintf(stderr, "%" PRIu64, posStart);
         fprintf(stderr, "..");
     }
     if (bEnd) {
         total = posEnd - pos;
         if (total < bufferLen) bufferLen = total;
         if (bStatus) fprintf(stderr, "%" PRIu64 " (%" PRIu64 " bytes)", posEnd, posEnd - posStart);
-    } else if (bStatus) fprintf(stderr, ".");
+    }
     if (bStatus) {
         fprintf(stderr, " -> ");
-        if (cOutSeek == 1 || (pathOut != NULL && cOutSeek != -1)) fprintf(stderr, "%" PRIu64, posWrite); else fprintf(stderr, ".");
+        if (cOutSeek == 1 || (pathOut != NULL && cOutSeek != -1)) fprintf(stderr, "%" PRIu64, posWrite);
         fprintf(stderr, ".. (buffer %d", bufferLen);
         if (bEnd) fprintf(stderr, " * %" PRIu64, total / bufferLen + (total % bufferLen ? 1 : 0));
         fprintf(stderr, ")\n");
