@@ -45,9 +45,10 @@ M    1024 * 1024
 .br
 G    1024 * 1024 * 1024
 .SS Index
-Instead of specifying the values for START or END directly, they may be read from an index. The index is an array of unsigned 64-bit (8-byte) integers, read from file descriptor 3 by default, see -X. Index files must be seekable.
+Instead of specifying the values for START or END directly, they may be read from an index. The index is an array of unsigned 64-bit (8-byte) integers, read from file descriptor 3 by default, see -X.
 .PP
 If you specify a zero-based array position prefixed with an '*' (asterisk) for START or END the respective value from the index will be used in its place.
+A '*' that is not followed by any number will read the next value from the index file at it's current position. This allows to read index values from non-seekable resources.
 .PP
 As a shorthand for extracting the range between two adjacent index entries the position of the range prefixed with a '^' (caret) may be passed for START, overriding END.
 .br
@@ -65,7 +66,6 @@ If the total number of bytes to copy is known and smaller than SIZE, the buffer 
 Always fill the entire buffer before writing, unless END or the end of input has been reached.
 .br
 Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output immediately.
-.br
 Partial reads may occur when reading form remote resources or terminals but usually are of no concern for regular files and local storage devices.
 .TP
 .B \-e
@@ -102,6 +102,9 @@ By default, read/write statistics are printed to standard error after each read 
 .TP
 .B \-Q
 Be more quiet. Do not print any progress or status messages, only errors, to standard error.
+.TP
+.B \-r \fIFILE
+Open FILE for reading and use it as resource for the index. This overrides -X.
 .TP
 .B \-s
 Skip input instead of seeking. That is, read and discard as many bytes form the input as necessary to reach START instead of directly seeking to that position.

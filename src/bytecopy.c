@@ -1,4 +1,3 @@
-
 /*
  * bytecopy
  * GPL-3.0 License
@@ -41,23 +40,23 @@ char parseNum(char *str, uint64_t *n) {
     return 0;
 }
 
-char readIdx(int fd, uint64_t offset, uint64_t idx, uint64_t *val) {
-    int n = pread(fd, val, 8, offset + idx * 8);
+char readIdx(int fd, uint64_t *offset, uint64_t idx, uint64_t *val) {
+    int n = (offset == NULL ? read(fd, val, 8) : pread(fd, val, 8, *offset + idx * 8));
     if (n < 0) {
-        fprintf(stderr, "bytecopy: error reading index %" PRIu64 " from %d: %s\n", idx, fd, strerror(errno));
+        fprintf(stderr, "bytecopy: error reading index %" PRIu64 ": %s\n", idx, strerror(errno));
     } else if (n == 0) {
         return 1;
     } else if (n < 8) {
-        fprintf(stderr, "bytecopy: failed to read index %" PRIu64 " from %d\n", idx, fd);
+        fprintf(stderr, "bytecopy: failed to read index %" PRIu64 "\n", idx);
     } else {
         return 0;
     }
     return 2;
 }
 
-char readIdxStr(int fd, uint64_t offset, char *strIdx, uint64_t *idx, uint64_t *val) {
-    if (parseNum(strIdx, idx)) return 1;
-    return readIdx(fd, offset, *idx, val);
+char readIdxStr(int fd, uint64_t *offset, char *strIdx, uint64_t *idx, uint64_t *val) {
+    if (strIdx[0] != '\0' && parseNum(strIdx, idx)) return 1;
+    return readIdx(fd, strIdx[0] == '\0' ? NULL : offset, *idx, val);
 }
 
 char seek(int fd, uint64_t *pos, char *ref) {
@@ -79,7 +78,7 @@ struct ioStats {
 };
 
 void printStats(struct ioStats *io, char lineEnd) {
-    fprintf(stderr, "bytecopy: reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes %c", io->rd, io->wr, io->in, io->out, lineEnd);
+    fprintf(stderr, "bytecopy: reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes%c", io->rd, io->wr, io->in, io->out, lineEnd);
 }
 
 int main(int argc, char **argv) {
@@ -87,11 +86,11 @@ int main(int argc, char **argv) {
     uint64_t n, pos = 0, posStart = 0, total, posIdx = 0, posWrite, posEnd;
     bool bEnd = false, bInSeek = true, bStatus = true, bFlush = true, bIgnEnd = false, bWrEmpty = false;
     int opt, fdIn = 0, fdOut = 1, fdIdx = 3, rd, wr, rq, bufferLen = BUFFER_DEFAULT, bufferPos;
-    char *pathIn = NULL, *pathOut = NULL, cOutSeek = 0, cProg = 0;
+    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, cOutSeek = 0, cProg = 0;
     struct ioStats io = {0, 0, 0, 0};
     
     // parse options
-    while ((opt = getopt(argc, argv, ":b:BeEhi:I:o:O:qQsw:x:X:")) != -1) {
+    while ((opt = getopt(argc, argv, ":b:BeEhi:I:o:O:qQr:sw:x:X:")) != -1) {
         if (opt == 'h') {
             fprintf(stderr, 
                 "Usage: bytecopy [OPTIONS] [START] [END|+LENGTH]\n"
@@ -109,6 +108,7 @@ int main(int argc, char **argv) {
                 "    -O FD       write to a different file descriptor (default: standard output)\n"
                 "    -q          don't print progress to standard error\n"
                 "    -Q          print no status, only errors to standard error\n"
+                "    -r FILE     open FILE for reading the index (overrides -X)\n"
                 "    -s          skip (read/discard) input up to START instead of seeking\n"
                 "    -w POS      seek to POS in output before writing (you will want to use -o or 1<> with this)\n"
                 "    -x OFFSET   use OFFSET when reading index values\n"
@@ -167,6 +167,9 @@ int main(int argc, char **argv) {
             // errors only
             cProg = -1;
             bStatus = false;
+        } else if (opt == 'r') {
+            // resource file
+            pathRes = optarg;
         } else if (opt == 's') {
             // don't seek in input
             bInSeek = false;
@@ -198,15 +201,23 @@ int main(int argc, char **argv) {
         }
     }
     
+    if (pathRes != NULL) {
+        // open resource file for index
+        if ((fdIdx = open(pathRes, O_RDONLY)) == -1) {
+            fprintf(stderr, "bytecopy: failed to open resource file: %s: %s\n", pathRes, strerror(errno));
+            return 1;
+        }
+    }
+    
     // parse range
-    if (argc > optind) { 
+    if (argc > optind) {
         if (argv[optind][0] == '^') {
             // range from index
             if (parseNum(&argv[optind][1], &n)) return 1;
             // start
-            if (n > 0) if (readIdx(fdIdx, posIdx, n - 1, &posStart)) return 1;
+            if (n > 0) if (readIdx(fdIdx, &posIdx, n - 1, &posStart)) return 1;
             // end
-            switch (readIdx(fdIdx, posIdx, n, &posEnd)) {
+            switch (readIdx(fdIdx, &posIdx, n, &posEnd)) {
                 case 0:
                     bEnd = true;
                     break;
@@ -218,10 +229,11 @@ int main(int argc, char **argv) {
             }
         } else {
             // start
-            if (argc > optind && argv[optind][0] != '-') {
+            if (argv[optind][0] != '-') {
                 if (argv[optind][0] == '*') {
                     // from index
-                    if (readIdxStr(fdIdx, posIdx, &argv[optind][1], &n, &posStart)) return 1;
+                    n = 0;
+                    if (readIdxStr(fdIdx, &posIdx, &argv[optind][1], &n, &posStart)) return 1;
                 } else {
                     // direct
                     if (parseNum(argv[optind], &posStart)) return 1;
@@ -232,7 +244,8 @@ int main(int argc, char **argv) {
             if (argc > ++optind && argv[optind][0] != '-') {
                 if (argv[optind][0] == '*') {
                     // from index
-                    if (readIdxStr(fdIdx, posIdx, &argv[optind][1], &n, &posEnd)) return 1;
+                    n = 1;
+                    if (readIdxStr(fdIdx, &posIdx, &argv[optind][1], &n, &posEnd)) return 1;
                 } else if (argv[optind][0] == '+') {
                     // offset
                     if (parseNum(&argv[optind][1], &posEnd)) return 1;
@@ -244,7 +257,9 @@ int main(int argc, char **argv) {
                 bEnd = true;
             }
         }
-    }
+    } else bInSeek = false;
+    
+    if (pathRes != NULL) close(fdIdx);
     
     if (argc > (optind + 1)) {
         fprintf(stderr, "bytecopy: superfluous argument %d: %s\n", optind, argv[optind + 1]);
@@ -260,7 +275,7 @@ int main(int argc, char **argv) {
     // prep input
     if (pathIn != NULL) {
         if ((fdIn = open(pathIn, O_RDONLY)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open input: %s: %s\n", pathIn, strerror(errno));
+            fprintf(stderr, "bytecopy: failed to open input file: %s: %s\n", pathIn, strerror(errno));
             return 1;
         }
     }
@@ -272,7 +287,7 @@ int main(int argc, char **argv) {
     // prep output
     if (pathOut != NULL) {
         if ((fdOut = open(pathOut, O_WRONLY | O_CREAT, 0666)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open output: %s: %s\n", pathOut, strerror(errno));
+            fprintf(stderr, "bytecopy: failed to open output file: %s: %s\n", pathOut, strerror(errno));
             return 1;
         }
     }
