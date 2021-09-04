@@ -47,7 +47,7 @@ char readIdx(int fd, uint64_t *offset, uint64_t idx, uint64_t *val) {
     } else if (n == 0) {
         return 1;
     } else if (n < 8) {
-        fprintf(stderr, "bytecopy: failed to read index %" PRIu64 "\n", idx);
+        fprintf(stderr, "bytecopy: index %" PRIu64 " could not be fully read\n", idx);
     } else {
         return 0;
     }
@@ -56,7 +56,9 @@ char readIdx(int fd, uint64_t *offset, uint64_t idx, uint64_t *val) {
 
 char readIdxStr(int fd, uint64_t *offset, char *strIdx, uint64_t *idx, uint64_t *val) {
     if (strIdx[0] != '\0' && parseNum(strIdx, idx)) return 1;
-    return readIdx(fd, strIdx[0] == '\0' ? NULL : offset, *idx, val);
+    char rslt = readIdx(fd, strIdx[0] == '\0' ? NULL : offset, *idx, val);
+    if (rslt == 1) fprintf(stderr, "bytecopy: at end of input trying to read index %" PRIu64 "\n", *idx);
+    return rslt;
 }
 
 char seek(int fd, uint64_t *pos, char *ref) {
@@ -306,7 +308,7 @@ int main(int argc, char **argv) {
     }
     if (bEnd) {
         total = posEnd - pos;
-        if (total < bufferLen) bufferLen = total;
+        if (total < bufferLen) bufferLen = (total < 1 ? 1 : total);
         if (bStatus) fprintf(stderr, "%" PRIu64 " (%" PRIu64 " bytes)", posEnd, posEnd - posStart);
     }
     if (bStatus) {
@@ -319,9 +321,8 @@ int main(int argc, char **argv) {
     buffer = malloc(bufferLen);
     
     // copy
-    rd = 1;
     bufferPos = 0;
-    while (rd && (!bEnd || pos < posEnd)) {
+    do {
         rq = (bEnd && (pos + bufferLen) > posEnd ? posEnd - pos : bufferLen) - bufferPos;
         rd = read(fdIn, buffer + bufferPos, rq);
         io.rd++;
@@ -347,10 +348,10 @@ int main(int argc, char **argv) {
         if (cProg >= 0) {
             fprintf(stderr, "\r");
             printStats(&io, ' ');
-            if (bEnd) fprintf(stderr, "(%.1f%%) ", (float)io.in / total * 100);
+            if (bEnd) fprintf(stderr, "(%.1f%%) ", total == 0 ? 100.0 : (float)io.in / total * 100);
             cProg = 1;
         }
-    }
+    } while (rd && (!bEnd || pos < posEnd));
     
     // final stats
     if (cProg > 0) fprintf(stderr, "\n");
