@@ -8,19 +8,20 @@ SYNOPSIS
 
 DESCRIPTION
        Copy arbitrary ranges of bytes from one file to another or between different locations in the same file.
-       Extracting a segment to a new file is possible as well as updating a segment within an existing file.
        A file means any regular or special file or open file descriptor on which read or write operations may be performed.
+       The files as well as the range to copy may be of any size within operating system and file system limits.
 
        START is the zero-based offset of the first byte to copy, counted from the beginning of the input file.
-       If not specified, no seek operation will be performed on the input (see also -s).
+       If not specified, no initial seek operation will be performed on the input (see also -s).
 
-       END is the zero-based offset of the byte at which the copy process shall end, counted from the beginning of the input
-       file.  The addressed byte is the first not to be copied and therefore may lay after the last byte in the file.
-       If not specified, the copy operation is unbounded and will continue until the end of input.
+       END is the zero-based offset at which the copy process shall end.  This means the first byte not to be copied,
+       counted from the beginning of the input file.  The location pointed to may lay after the last byte in the file.
+       If not specified, the copy operation is unbounded and will continue until the end of input. That is, until a read
+       operation returns no data.
        Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing
-       is copied, but must not be smaller than START.
+       is copied, but must not be smaller.
 
-       LENGTH is the number of bytes to be copied, prefixed with a '+' (plus sign).  It may be specified alternatively to
+       LENGTH is the number of bytes to be copied. Prefixed with a '+' (plus sign), this may be specified alternatively to
        END, while the corresponding value for END is calculated by adding LENGTH to START.
 
        Passing a '-' (dash) in place of START or END is equivalent to omitting them.
@@ -40,17 +41,17 @@ DESCRIPTION
 
    Index
        Instead of specifying the values for START or END directly, they may be read from an index. The index is an array of
-       unsigned 64-bit (8-byte) integers, read from file descriptor 3 by default, see -X.
+       unsigned 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3 by default, see -X.
 
-       If you specify a zero-based array position prefixed with an '*' (asterisk) for START or END the respective value from
-       the index will be used in its place.  A '*' that is not followed by any number will read the next value from the
-       index file at it's current position. This allows to read index values from non-seekable resources.
+       To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for
+       START or END.  A '*' that is not followed by any number will read the next value from whatever the current position
+       of the index file is. This allows to read offset values from non-seekable resources.
 
-       As a shorthand for extracting the range between two adjacent index entries the position of the range prefixed with a
-       '^' (caret) may be passed for START, overriding END.
-       The range index is derived as follows (example for an index with three entries):
+       As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed
+       with a '^' (caret) may be passed for START, overriding END.
+       Range positions are derived as follows (example for an index with three entries):
 
-              <start of file> ^0 <first entry> ^1 <second entry> ^2 <third entry> ^3 <end of file>
+              <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
 
 OPTIONS
        -b SIZE
@@ -76,40 +77,51 @@ OPTIONS
 
        -I FD  Read input from file descriptor FD instead of the standard input.
 
+       -n     Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed
+              after each read/write cycle and normally overwrites the previous one.
+
        -o FILE
               Open FILE for writing and use it as output instead of the standard output. This overrides -O.
               If the file does not exist it will be created.
               Unless -w is used, an attempt will be made to seek to the end of the file before writing.
+              When writing directly to a storage device, you will always have to specify -w as the default behavior of
+              appending will write beyond bounds.
 
        -O FD  Write output to file descriptor FD instead of the standard output.
 
-       -q     Be quiet. Do not output progress.
-              By default, read/write statistics are printed to standard error after each read operation.
+       -q     Be quiet. Do not report progress.
+              By default, statistics are printed to standard error after each read/write cycle.
 
        -Q     Be more quiet. Do not print any progress or status messages, only errors, to standard error.
 
        -r FILE
-              Open FILE for reading and use it as resource for the index. This overrides -X.
+              Open FILE for reading and use it as resource for the index array. This overrides -X.
 
-       -s     Skip input instead of seeking. That is, read and discard as many bytes form the input as necessary to reach
+       -s     Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach
               START instead of directly seeking to that position.
               This should only be used if the input is not seekable and cannot be accessed by other means.
+
+       -S     Synchronize storage after each write. Requests that all data be written/flushed to the file/device immediately
+              instead of being buffered by the operating system.
+              This is useful to minimize cache usage and improve progress monitoring when copying a large amount of data to
+              a slow storage.  It can also reduce data loss during a lengthy copy process in case of a system crash.
+              For maximum copy speed this option should be avoided.
 
        -w POS Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write,
               counted from the beginning of the output file.
               Note that if a file descriptor has been opened in append mode any write operation will commence at the end of
               the file regardless of a previous seek. So, for this to work correctly you need to either open the output file
               using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
-              Seeking to a position beyond the end of a file is legit and the gap will be filled with zero-bytes upon first
-              write. Advanced file systems are able to accomplish this logically without using up physical disk space until
-              something is actually written to the gap.
+              Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes
+              upon first write. Advanced file systems are able to accomplish this logically without using up physical disk
+              space until something is actually written to the gap.
               Passing a '-' (dash) for POS prevents any seek operation on the output, see -o.
 
        -x OFFSET
-              Use an offset for reading index values. Where OFFSET is a zero-based byte position counted form the beginning
-              of the index file pointing to the first index entry.
+              Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the
+              beginning of the index file pointing to the first index entry.
 
-       -X FD  Read index values from file descriptor FD instead of the default 3.
+       -X FD  Read the index array from file descriptor FD instead of the default 3.
 
 EXAMPLES
        Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
@@ -118,7 +130,7 @@ EXAMPLES
 
        or equivalently:
 
-              bytecopy -i source.file 1000 1300 > new.file
+              bytecopy 1000 +300 < source.file > new.file
 
        or equivalently:
 
@@ -136,7 +148,7 @@ EXAMPLES
 
        or more safely, specifying the field length:
 
-              echo "Earth" | bytecopy -o some.file -w 6 - 5
+              echo "Earth" | bytecopy -o some.file -w6 - 5
 
        Extract the segment between the second and the third index entry:
        Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte
@@ -146,7 +158,11 @@ EXAMPLES
 
        or equivalently:
 
-              bytecopy -i big.file ^2 3<big.file.idx > segment.file
+              bytecopy -i big.file -r big.file.idx ^2 > segment.file
+
+       Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes:
+
+              zcat bootable.img.gz | bytecopy -b 4M -w0 -So /dev/sdX
 
 AUTHOR
        Written by Johannes Schmitz
@@ -154,4 +170,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                     August 2021                                             BYTECOPY(1)
+UNIX                                                      June 2022                                              BYTECOPY(1)

@@ -2,7 +2,7 @@
  * bytecopy
  * GPL-3.0 License
  * 
- * J. Schmitz, 2021
+ * J. Schmitz, 2022
  * 
  */
 
@@ -86,13 +86,13 @@ void printStats(struct ioStats *io, char lineEnd) {
 int main(int argc, char **argv) {
     uint8_t *buffer;
     uint64_t n, pos = 0, posStart = 0, total, posIdx = 0, posWrite, posEnd;
-    bool bEnd = false, bInSeek = true, bStatus = true, bFlush = true, bIgnEnd = false, bWrEmpty = false;
+    bool bEnd = false, bInSeek = true, bStatus = true, bStatusLF = false, bFlush = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, fdIn = 0, fdOut = 1, fdIdx = 3, rd, wr, rq, bufferLen = BUFFER_DEFAULT, bufferPos;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, cOutSeek = 0, cProg = 0;
     struct ioStats io = {0, 0, 0, 0};
     
     // parse options
-    while ((opt = getopt(argc, argv, ":b:BeEhi:I:o:O:qQr:sw:x:X:")) != -1) {
+    while ((opt = getopt(argc, argv, ":b:BeEhi:I:no:O:qQr:sSw:x:X:")) != -1) {
         if (opt == 'h') {
             fprintf(stderr, 
                 "Usage: bytecopy [OPTIONS] [START] [END|+LENGTH]\n"
@@ -100,20 +100,22 @@ int main(int argc, char **argv) {
                 "or for LENGTH or till the end of input, to output.\n"
                 "\n"
                 "    -b SIZE     set I/O buffer size (default: 512K)\n"
-                "    -B          force buffering, do not write output after each read\n"
+                "    -B          force buffering, do not write after partial read\n"
                 "    -e          write final buffer even if empty\n"
                 "    -E          do not consider premature end of input an error\n"
                 "    -h          print this help and exit\n"
                 "    -i FILE     open FILE for input instead of reading from standard input (overrides -I)\n"
                 "    -I FD       read from a different file descriptor (default: standard input)\n"
+                "    -n          print each progress report on a new line\n"
                 "    -o FILE     open FILE for output instead of writing to standard output (overrides -O)\n"
                 "    -O FD       write to a different file descriptor (default: standard output)\n"
-                "    -q          don't print progress to standard error\n"
-                "    -Q          print no status, only errors to standard error\n"
-                "    -r FILE     open FILE for reading the index (overrides -X)\n"
-                "    -s          skip (read/discard) input up to START instead of seeking\n"
+                "    -q          don't print progress, only status messages to standard error\n"
+                "    -Q          print no status, only errors to standard error (implies -q)\n"
+                "    -r FILE     open FILE for reading index values (overrides -X)\n"
+                "    -s          skip (read and discard) input up to START instead of seeking\n"
+                "    -S          synchronize storage (flush to device) after each write\n"
                 "    -w POS      seek to POS in output before writing (you will want to use -o or 1<> with this)\n"
-                "    -x OFFSET   use OFFSET when reading index values\n"
+                "    -x OFFSET   use OFFSET for reading index values\n"
                 "    -X FD       read index values from a different file descriptor (default: 3)\n"
                 "\n"
                 "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
@@ -128,7 +130,7 @@ int main(int argc, char **argv) {
                 "Values for START and END may be read from an index consisting of unsigned 64-bit integers\n"
                 "which are addressed using their zero-based position prefixed with '*'.\n"
                 "As a shorthand, the range between two adjacent index values may be specified\n"
-                "by passing the zero-based position of the range prefixed with '^' to START.\n"
+                "by passing the zero-based position of the range prefixed with '^' as START.\n"
                 "Where the first range is from the beginning of the input to the first index value\n"
                 "and the last range is from the last index value to the end of input.\n"
             );
@@ -156,6 +158,9 @@ int main(int argc, char **argv) {
         } else if (opt == 'I') {
             // input fd
             fdIn = atoi(optarg);
+        } else if (opt == 'n') {
+            // line-feed after status
+            bStatusLF = true;
         } else if (opt == 'o') {
             // output file
             pathOut = optarg;
@@ -175,6 +180,9 @@ int main(int argc, char **argv) {
         } else if (opt == 's') {
             // don't seek in input
             bInSeek = false;
+        } else if (opt == 'S') {
+            // sync after write
+            bSync = true;
         } else if (opt == 'w') {
             // seek in output
             if (optarg[0] == '-') {
@@ -337,6 +345,7 @@ int main(int argc, char **argv) {
                 rq = bufferPos - n;
                 if (rq > 0 || bWrEmpty) {
                     wr = write(fdOut, buffer + n, rq);
+                    if (bSync && wr != -1 && fsync(fdOut) == -1) perror("bytecopy: sync failed");
                     io.wr++;
                 } else wr = 0;
                 if (wr < 0 || wr != rq) break;
@@ -346,15 +355,16 @@ int main(int argc, char **argv) {
         }
         // progress
         if (cProg >= 0) {
-            fprintf(stderr, "\r");
+            if (!bStatusLF) fprintf(stderr, "\r");
             printStats(&io, ' ');
             if (bEnd) fprintf(stderr, "(%.1f%%) ", total == 0 ? 100.0 : (float)io.in / total * 100);
+            if (bStatusLF) fprintf(stderr, "\n");
             cProg = 1;
         }
     } while (rd && (!bEnd || pos < posEnd));
     
     // final stats
-    if (cProg > 0) fprintf(stderr, "\n");
+    if (cProg > 0 && !bStatusLF) fprintf(stderr, "\n");
     if (bStatus && cProg < 0) printStats(&io, '\n');
     
     // error handling
