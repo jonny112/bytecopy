@@ -62,7 +62,7 @@ char readIdxStr(int fd, uint64_t *offset, char *strIdx, uint64_t *idx, uint64_t 
 }
 
 char seek(int fd, uint64_t *pos, char *ref) {
-    uint64_t n = lseek64(fd, *pos, SEEK_SET);
+    off64_t n = lseek64(fd, *pos, SEEK_SET);
     if (n != *pos) {
         fprintf(stderr, "bytecopy: seeking to %" PRIu64 " in %s failed: ", *pos, ref);
         if (n == -1) fprintf(stderr, "%s\n", strerror(errno)); else fprintf(stderr, "position is %" PRIu64 "\n", n);
@@ -72,12 +72,46 @@ char seek(int fd, uint64_t *pos, char *ref) {
     return 0;
 }
 
+char seekEnd(int fd, off64_t *pos, char *ref) {
+    *pos = lseek64(fd, 0, SEEK_END);
+    if (*pos == -1) {
+        fprintf(stderr, "failed to find end of %s: %s\n", ref, strerror(errno));
+        return 1;
+    }
+    return 0;
+}
+
 struct ioStats {
     uint64_t in;
     uint64_t out;
     uint64_t rd;
     uint64_t wr;
+    int fdIn;
+    int fdOut;
+    off64_t lenIn;
+    off64_t lenOut;
 };
+
+char offsetEnd(char *opt, uint64_t *pos, struct ioStats *io) {
+    off64_t *len;
+    uint64_t offset = 0;
+    bool in = opt[0] == ':';
+    bool add = true;
+    
+    if (opt[1] != '\0') {
+        if (opt[1] == '-') add = false;
+        else if (opt[1] != '+') {
+            fprintf(stderr, "bad offset sign '%c'.\n", opt[1]);
+            return 1;
+        }
+        if (parseNum(&opt[2], &offset)) return 1;
+    }
+    
+    len = in ? &io->lenIn : &io->lenOut;
+    if (*len == -1) if (seekEnd(in ? io->fdIn : io->fdOut, len, in ? "input" : "output")) return 1;
+    if (add) *pos = *len + offset; else *pos = *len - offset;
+    return 0;
+}
 
 void printStats(struct ioStats *io, char lineEnd) {
     fprintf(stderr, "bytecopy: reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes%c", io->rd, io->wr, io->in, io->out, lineEnd);
@@ -86,13 +120,15 @@ void printStats(struct ioStats *io, char lineEnd) {
 int main(int argc, char **argv) {
     uint8_t *buffer;
     uint64_t n, pos = 0, posStart = 0, total, posIdx = 0, posWrite, posEnd;
-    bool bEnd = false, bInSeek = true, bStatus = true, bStatusLF = false, bFlush = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
-    int opt, fdIn = 0, fdOut = 1, fdIdx = 3, rd, wr, rq, bufferLen = BUFFER_DEFAULT, bufferPos;
+    bool bEnd = false, bInSeek = true, bStatus = true, bStatusLF = false,
+        bFlush = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
+    int opt, flagsOut = O_WRONLY | O_CREAT,
+        fdIdx = 3, bufferLen = BUFFER_DEFAULT, bufferPos, rd, wr, rq;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, cOutSeek = 0, cProg = 0;
-    struct ioStats io = {0, 0, 0, 0};
+    struct ioStats io = {0, 0, 0, 0, STDIN_FILENO, STDOUT_FILENO, -1, -1};
     
     // parse options
-    while ((opt = getopt(argc, argv, ":b:BeEhi:I:no:O:qQr:sSw:x:X:")) != -1) {
+    while ((opt = getopt(argc, argv, ":b:BeEhi:I:no:O:qQr:sStw:x:X:yY")) != -1) {
         if (opt == 'h') {
             fprintf(stderr, 
                 "Usage: bytecopy [OPTIONS] [START] [END|+LENGTH]\n"
@@ -104,19 +140,22 @@ int main(int argc, char **argv) {
                 "    -e          write final buffer even if empty\n"
                 "    -E          do not consider premature end of input an error\n"
                 "    -h          print this help and exit\n"
-                "    -i FILE     open FILE for input instead of reading from standard input (overrides -I)\n"
+                "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
                 "    -I FD       read from a different file descriptor (default: standard input)\n"
                 "    -n          print each progress report on a new line\n"
-                "    -o FILE     open FILE for output instead of writing to standard output (overrides -O)\n"
+                "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
                 "    -O FD       write to a different file descriptor (default: standard output)\n"
                 "    -q          don't print progress, only status messages to standard error\n"
                 "    -Q          print no status, only errors to standard error (implies -q)\n"
                 "    -r FILE     open FILE for reading index values (overrides -X)\n"
                 "    -s          skip (read and discard) input up to START instead of seeking\n"
-                "    -S          synchronize storage (flush to device) after each write\n"
+                "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
+                "    -t          truncate (overwrite) output file (only works with -o)\n"
                 "    -w POS      seek to POS in output before writing (you will want to use -o or 1<> with this)\n"
                 "    -x OFFSET   use OFFSET for reading index values\n"
                 "    -X FD       read index values from a different file descriptor (default: 3)\n"
+                "    -y          use data synchronized I/O mode on the output file (only works with -o)\n"
+                "    -Y          use fully synchronized I/O mode on the output file (only works with -o)\n"
                 "\n"
                 "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
                 "LENGTH is a byte count added to START to obtain END.\n"
@@ -157,7 +196,7 @@ int main(int argc, char **argv) {
             pathIn = optarg;
         } else if (opt == 'I') {
             // input fd
-            fdIn = atoi(optarg);
+            io.fdIn = atoi(optarg);
         } else if (opt == 'n') {
             // line-feed after status
             bStatusLF = true;
@@ -166,7 +205,7 @@ int main(int argc, char **argv) {
             pathOut = optarg;
         } else if (opt == 'O') {
             // output fd
-            fdOut = atoi(optarg);
+            io.fdOut = atoi(optarg);
         } else if (opt == 'q') {
             // no progress
             cProg = -1;
@@ -183,6 +222,9 @@ int main(int argc, char **argv) {
         } else if (opt == 'S') {
             // sync after write
             bSync = true;
+        } else if (opt == 't') {
+            // truncate output
+            flagsOut = O_TRUNC;
         } else if (opt == 'w') {
             // seek in output
             if (optarg[0] == '-') {
@@ -197,6 +239,12 @@ int main(int argc, char **argv) {
         } else if (opt == 'X') {
             // output fd
             fdIdx = atoi(optarg);
+        } else if (opt == 'y') {
+            // data synchronized output
+            flagsOut |= O_DSYNC;
+        } else if (opt == 'Y') {
+            // fully synchronized output
+            flagsOut |= O_SYNC;
         }
         
         if (opt == '!') {
@@ -215,6 +263,22 @@ int main(int argc, char **argv) {
         // open resource file for index
         if ((fdIdx = open(pathRes, O_RDONLY)) == -1) {
             fprintf(stderr, "bytecopy: failed to open resource file: %s: %s\n", pathRes, strerror(errno));
+            return 1;
+        }
+    }
+    
+    // open input
+    if (pathIn != NULL) {
+        if ((io.fdIn = open(pathIn, O_RDONLY)) == -1) {
+            fprintf(stderr, "bytecopy: failed to open input file: %s: %s\n", pathIn, strerror(errno));
+            return 1;
+        }
+    }
+    
+    // open output
+    if (pathOut != NULL) {
+        if ((io.fdOut = open(pathOut, flagsOut, 0666)) == -1) {
+            fprintf(stderr, "bytecopy: failed to open output file: %s: %s\n", pathOut, strerror(errno));
             return 1;
         }
     }
@@ -240,7 +304,10 @@ int main(int argc, char **argv) {
         } else {
             // start
             if (argv[optind][0] != '-') {
-                if (argv[optind][0] == '*') {
+                if (argv[optind][0] == ':' || argv[optind][0] == '~') {
+                    // from end
+                    if (offsetEnd(argv[optind], &posStart, &io)) return 1;
+                } else if (argv[optind][0] == '*') {
                     // from index
                     n = 0;
                     if (readIdxStr(fdIdx, &posIdx, &argv[optind][1], &n, &posStart)) return 1;
@@ -252,7 +319,10 @@ int main(int argc, char **argv) {
             
             // end
             if (argc > ++optind && argv[optind][0] != '-') {
-                if (argv[optind][0] == '*') {
+                if (argv[optind][0] == ':' || argv[optind][0] == '~') {
+                    // from end
+                    if (offsetEnd(argv[optind], &posEnd, &io)) return 1;
+                } else if (argv[optind][0] == '*') {
                     // from index
                     n = 1;
                     if (readIdxStr(fdIdx, &posIdx, &argv[optind][1], &n, &posEnd)) return 1;
@@ -282,29 +352,17 @@ int main(int argc, char **argv) {
         return 1;
     }
     
-    // prep input
-    if (pathIn != NULL) {
-        if ((fdIn = open(pathIn, O_RDONLY)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open input file: %s: %s\n", pathIn, strerror(errno));
-            return 1;
-        }
-    }
+    // seek input
     if (bInSeek) {
-        if (seek(fdIn, &posStart, "input")) return 1;
+        if (seek(io.fdIn, &posStart, "input")) return 1;
         pos = posStart;
     }
     
-    // prep output
-    if (pathOut != NULL) {
-        if ((fdOut = open(pathOut, O_WRONLY | O_CREAT, 0666)) == -1) {
-            fprintf(stderr, "bytecopy: failed to open output file: %s: %s\n", pathOut, strerror(errno));
-            return 1;
-        }
-    }
+    // seek output
     if (cOutSeek == 1) {
-        if (seek(fdOut, &posWrite, "output")) return 1;
+        if (seek(io.fdOut, &posWrite, "output")) return 1;
     } else if (pathOut != NULL && cOutSeek != -1) {
-        posWrite = lseek64(fdOut, 0, SEEK_END);
+        posWrite = lseek64(io.fdOut, 0, SEEK_END);
     }
     
     // allocate buffer
@@ -332,7 +390,7 @@ int main(int argc, char **argv) {
     bufferPos = 0;
     do {
         rq = (bEnd && (pos + bufferLen) > posEnd ? posEnd - pos : bufferLen) - bufferPos;
-        rd = read(fdIn, buffer + bufferPos, rq);
+        rd = read(io.fdIn, buffer + bufferPos, rq);
         io.rd++;
         if (rd < 0) break;
         io.in += rd;
@@ -344,8 +402,8 @@ int main(int argc, char **argv) {
                 n = posStart > n ? posStart - n : 0;
                 rq = bufferPos - n;
                 if (rq > 0 || bWrEmpty) {
-                    wr = write(fdOut, buffer + n, rq);
-                    if (bSync && wr != -1 && fsync(fdOut) == -1) perror("bytecopy: sync failed");
+                    wr = write(io.fdOut, buffer + n, rq);
+                    if (bSync && wr != -1 && fsync(io.fdOut) == -1) perror("bytecopy: sync failed");
                     io.wr++;
                 } else wr = 0;
                 if (wr < 0 || wr != rq) break;
@@ -379,8 +437,8 @@ int main(int argc, char **argv) {
         return 1;
     }
     
-    if (pathIn != NULL) close(fdIn);
-    if (pathOut != NULL) close(fdOut);
+    if (pathIn != NULL) close(io.fdIn);
+    if (pathOut != NULL) close(io.fdOut);
     
     if (bEnd && !bIgnEnd && io.out != (posEnd - posStart)) {
         fprintf(stderr, "bytecopy: premature end of input (%" PRIu64 "<%" PRIu64 ")\n", io.out, posEnd - posStart);
