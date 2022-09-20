@@ -1,19 +1,13 @@
 # bytecopy
-Copy arbitrary ranges of bytes from one file to another or between different locations in the same file.
-Extracting a segment to a new file is possible as well as updating a segment within an existing file.
+Copy byte arrays of arbitrary size from one file or device to another or between different locations in the same file. Extract a file segment to a new file or update a segment within an existing file.
 
 ## Usage
 ```sh
-bytecopy [OPTIONS] [START] [END]
-bytecopy [OPTIONS] [START] [+LENGTH]
-bytecopy [OPTIONS] [+LENGTH]
+bytecopy [OPTION]... [START] [END]
+bytecopy [OPTION]... [START] [+LENGTH]
+bytecopy [OPTION]... [+LENGTH]
 ```
 See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.
-
-## Installation
-
-The program should compile in any POSIX compatible gcc/glibc environment with the included Makefile.
-It merely makes use of standard functions, no additional libraries are needed.
 
 ## Examples
 
@@ -33,6 +27,10 @@ Update contents of a file:
 echo "Hello World!" > some.file
 echo "Earth" | bytecopy -o some.file -w 6 +5
 ```
+
+## Installation
+
+This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile. It merely utilizes standard functions, no additional libraries are needed.
 
 ## Bugs
 
