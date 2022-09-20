@@ -17,7 +17,9 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <string.h>
+#include <endian.h>
 #include <errno.h>
+#include <getopt.h>
 
 #define BUFFER_DEFAULT 1024 * 512
 #define FD_IDX_DEFAULT 3
@@ -32,6 +34,7 @@ struct ioStatus {
     int fdIn;
     int fdOut;
     int fdIdx;
+    char endian;
     void *buffer;
 };
 
@@ -70,8 +73,8 @@ char parseNum(char *str, int64_t *n) {
     return 0;
 }
 
-char readIdx(int fd, off64_t *offset, int64_t idx, int64_t *val) {
-    int n = (offset == NULL ? read(fd, val, 8) : pread(fd, val, 8, *offset + idx * 8));
+char readIdx(struct ioStatus *io, off64_t *offset, int64_t idx, int64_t *val) {
+    int n = (offset == NULL ? read(io->fdIdx, val, 8) : pread(io->fdIdx, val, 8, *offset + idx * 8));
     if (n == 0) {
         *val = -1;
     } else if (n < 0) {
@@ -80,13 +83,18 @@ char readIdx(int fd, off64_t *offset, int64_t idx, int64_t *val) {
     } else if (n < 8) {
         msg("index %" PRId64 " could not be fully read\n", idx);
         return 1;
-    } 
+    }
+    if (io->endian == 'u') {
+        *val = le64toh(*val);
+    } else if (io->endian == 'U') {
+        *val = be64toh(*val);
+    }
     return 0;
 }
 
-char readIdxStr(int fd, off64_t *offset, char *strIdx, int64_t *idx, int64_t *val) {
+char readIdxStr(struct ioStatus *io, off64_t *offset, char *strIdx, int64_t *idx, int64_t *val) {
     if (strIdx[0] != '\0' && parseNum(strIdx, idx)) return 1;
-    char rslt = readIdx(fd, strIdx[0] == '\0' ? NULL : offset, *idx, val);
+    char rslt = readIdx(io, strIdx[0] == '\0' ? NULL : offset, *idx, val);
     if (rslt == 1) msg("at end of input trying to read index %" PRId64 "\n", *idx);
     return rslt;
 }
@@ -160,7 +168,9 @@ void printStats(struct ioStatus *io, char lineEnd) {
 
 void printUsage() {
     fprintf(stderr, 
-        "Usage: bytecopy [OPTIONS] [START|+LENGTH] [END|+LENGTH]\n"
+        "Usage: bytecopy [OPTIONS] [START] [END]\n"
+        "       bytecopy [OPTIONS] [START] [+LENGTH]\n"
+        "       bytecopy [OPTIONS] [+LENGTH]\n"
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
@@ -181,11 +191,14 @@ void printUsage() {
         "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
         "    -t          truncate (overwrite) output file (only works with -o)\n"
         "    -T SIZE     truncate or extend length of output file to SIZE, before copying\n"
+        "    -u          assume little-endian byte order for index values\n"
+        "    -U          assume big-endian byte order for index values\n"
         "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
         "    -x OFFSET   use OFFSET for reading index values\n"
         "    -X FD       read index values from a different file descriptor (default: 3)\n"
         "    -y          use data synchronized I/O mode on the output file (only works with -o)\n"
         "    -Y          use fully synchronized I/O mode on the output file (only works with -o)\n"
+        "    -z          don't seek to end of output file (alias for -w -, default when not using -o)\n"
         "\n"
         "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
@@ -214,10 +227,14 @@ int main(int argc, char **argv) {
     bool bSeekStart = true, bStatus = true, bStatusLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, bufferPos, rd, wr, rq;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strOutSeek = NULL, *strOutTruncate = NULL, cProg = 0;
-    struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT};
+    struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0};
     
     // parse options
-    while ((opt = getopt(argc, argv, ":b:BeEhi:I:no:O:qQr:sStT:w:x:X:yY")) != -1) {
+    static const struct option long_opts[] = {
+        { "help", 0, 0, 'h' },
+        { 0, 0, 0, 0 }
+    };
+    while ((opt = getopt_long(argc, argv, ":b:BeEhi:I:no:O:qQr:sStTuU:w:x:X:yYz", long_opts, NULL)) != -1) {
         if (opt == 'h') {
             printUsage();
             return 1;
@@ -275,6 +292,9 @@ int main(int argc, char **argv) {
         } else if (opt == 'T') {
             // truncate output to length
             strOutTruncate = optarg;
+        } else if (opt == 'u' || opt == 'U') {
+            // specific endianness;
+            io.endian = opt;
         } else if (opt == 'w') {
             // seek in output
             strOutSeek = optarg;
@@ -289,6 +309,9 @@ int main(int argc, char **argv) {
         } else if (opt == 'Y') {
             // fully synchronized output
             flagsOut |= O_SYNC;
+        } else if (opt == 'z') {
+            // don't seek in output
+            strOutSeek = "-";
         }
         
         if (opt == '!') {
@@ -298,7 +321,7 @@ int main(int argc, char **argv) {
             msg("missing argument to option '%c'\n", optopt);
             return 1;
         } else if (opt == '?') {
-            msg("unknown option '%c', try -h for help\n", optopt);
+            msg("unknown option %s, try -h for help\n", argv[optind - 1]);
             return 1;
         }
     }
@@ -345,16 +368,16 @@ int main(int argc, char **argv) {
             // range from index
             if (parseNum(&argv[optind][1], &num)) return 1;
             // start
-            if (num > 0) if (readIdx(io.fdIdx, &offIdx, num - 1, &offStart)) return 1;
+            if (num > 0) if (readIdx(&io, &offIdx, num - 1, &offStart)) return 1;
             // end
-            if (readIdx(io.fdIdx, &offIdx, num, &offEnd)) return 1;
+            if (readIdx(&io, &offIdx, num, &offEnd)) return 1;
         } else {
             // start
             if (argv[optind][0] != '-' && argv[optind][0] != '+') {
                 if (argv[optind][0] == '*') {
                     // from index
                     num = 0;
-                    if (readIdxStr(io.fdIdx, &offIdx, &argv[optind][1], &num, &offStart)) return 1;
+                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return 1;
                 } else {
                     // direct or relative to end
                     if (parseOffset(argv[optind], &offStart, &io)) return 1;
@@ -369,7 +392,7 @@ int main(int argc, char **argv) {
                 if (argv[optind][0] == '*') {
                     // from index
                     num = 1;
-                    if (readIdxStr(io.fdIdx, &offIdx, &argv[optind][1], &num, &offEnd)) return 1;
+                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return 1;
                 } else if (argv[optind][0] == '+') {
                     // offset
                     if (parseOffset(&argv[optind][1], &offEnd, &io)) return 1;

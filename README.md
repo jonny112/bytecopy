@@ -4,7 +4,9 @@ Extracting a segment to a new file is possible as well as updating a segment wit
 
 ## Usage
 ```sh
-bytecopy [OPTIONS] [START] [END|+LENGTH]
+bytecopy [OPTIONS] [START] [END]
+bytecopy [OPTIONS] [START] [+LENGTH]
+bytecopy [OPTIONS] [+LENGTH]
 ```
 See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.
 
@@ -20,16 +22,16 @@ Exctract a range of bytes:
 bytecopy 1000 1300 < source.file > new.file
 ```
 ```sh
-bytecopy -i source.file 1000 1300 > new.file
+bytecopy -i source.file 1000 +300 > new.file
 ```
 ```sh
-bytecopy -i source.file 1000 +300 > new.file
+bytecopy -i source.file -to new.file 1000 +300
 ```
 
 Update contents of a file:
 ```sh
 echo "Hello World!" > some.file
-echo "Earth" | bytecopy -o some.file -w 6 - 5
+echo "Earth" | bytecopy -o some.file -w 6 +5
 ```
 
 ## Bugs

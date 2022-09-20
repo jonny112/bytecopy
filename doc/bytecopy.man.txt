@@ -50,8 +50,9 @@ DESCRIPTION
 
    Index
        Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an
-       array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3 by default.
-       See options -r, -x and -X.
+       array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3, by default.
+       See options -r, -x and -X. By default, values are read from the index file as-is, that is, assumed to be in the host
+       machine's native byte order. See -u and -U.
 
        To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for
        START or END.  A '*' that is not followed by any number will read the next value from whatever the current position
@@ -93,8 +94,9 @@ OPTIONS
        -o FILE
               Open FILE for writing and use it as output instead of the standard output. This overrides -O.
               If the file does not exist it will be created. For overwriting a file see -t.
-              By default, an attempt is made to seek to the end of the file before writing.  When writing directly to a
-              storage device, you will have to specify -w or -t as appending will write beyond bounds.
+              By default, an attempt is made to seek to the end of the file before writing. Specify -z to prevent this.
+              When writing directly to a storage device, you will have to specify one of -t, -w, -z as appending will write
+              beyond bounds.
 
        -O FD  Write output to file descriptor FD instead of the standard output.
 
@@ -112,7 +114,7 @@ OPTIONS
 
        -S     Synchronize storage after each write. Requests that all data be written/flushed to the storage immediately
               instead of being buffered by the operating system.
-              This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow slow
+              This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow
               storage.  It can also reduce data loss during a lengthy copy process in case of a system crash.
               For maximum speed this option should be avoided. When using -o consider using -y or -Y instead.
 
@@ -125,9 +127,13 @@ OPTIONS
               Set the length of the output file to SIZE before copying. This may shirk or grow the file.
               Existing data within the new range will be preserved unless -t is also used.
               Resizing does not reposition the file's write pointer, whether it lies within the new range or not.
-              When using -o without -t or -w, writing will start at the end of the resized file.
+              When using -o without -t, -w or -z, writing will start at the end of the resized file.
               Note that '?' in the argument to -w will refer to the new file size, while for all other arguments it refers
               to the original size.
+
+       -u     Assume values in the index file are little-endian and convert them if the local native byte order differs.
+
+       -U     Assume values in the index file are big-endian and convert them if the local native byte order differs.
 
        -w POS Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write,
               counted from the beginning of the output file.
@@ -137,7 +143,7 @@ OPTIONS
               Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes
               upon first write. Advanced file systems are able to accomplish this logically without using up physical disk
               space until something is actually written to the gap.
-              Passing a '-' (dash) for POS prevents any seek operation on the output, see -o.
+              Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 
        -x OFFSET
               Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the
@@ -145,12 +151,15 @@ OPTIONS
 
        -X FD  Read the index array from file descriptor FD instead of the default 3.
 
-       -y     When using -o, open the output file in data synchronized mode. This instructs the operating system not to
-              buffer written data but flush it directly to the storage. Some file metadata, such as the modification
-              timestamp may not be updated immediately. See also -S and -Y.
+       -y     Open the output file in data synchronized mode, when using -o.
+              This instructs the operating system not to buffer written data but flush it directly to the storage. Some file
+              metadata, such as the modification timestamp may not be updated immediately. See also -S and -Y.
 
-       -Y     When using -o, open the output file in fully synchronized mode. This is like -y but also synchronizes all file
-              metadata immediately.
+       -Y     Open the output file in fully synchronized mode, when using -o.
+              This is like -y but also synchronizes all file metadata immediately.
+
+       -z     Do not automatically seek to the end of the output file.
+              This is equivalent to passing '-' to -w and the default when not using -o.
 
 EXAMPLES
        Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
@@ -183,19 +192,20 @@ EXAMPLES
        Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte
        offsets 8 and 16 in the index file, respectively.
 
-              bytecopy -i big.file *1 *2 3<big.file.idx > segment.file
+              bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 
        or equivalently:
 
               bytecopy -i big.file -r big.file.idx ^2 > segment.file
 
-       Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes:
+       Copy a disk image to a device, synchronized, with the input file size as limit to indicate progress:
 
-              zcat bootable.img.gz | bytecopy -Sb4M > /dev/sdX
+              bytecopy -i disk.img -yzo /dev/sdX +:
 
-       Copy a disk image to a device, synchronized, with explicit range to indicate progress:
+       Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the
+       destination size as limit so progress indicates space used, while allowing the image to be shorter:
 
-              bytecopy -i disk.img -yo /dev/sdX -w0 +:
+              zcat bootable.img.gz | bytecopy -SEb4M +? > /dev/sdX
 
 AUTHOR
        Written by Johannes Schmitz
@@ -203,4 +213,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                      July 2022                                              BYTECOPY(1)
+UNIX                                                   September 2022                                            BYTECOPY(1)

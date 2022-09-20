@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "July 2022" UNIX "User Commands"
+.TH BYTECOPY 1 "September 2022" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -55,9 +55,9 @@ The values for START, END, LENGTH as well as options -T and -w may refer to the 
 .br
 For this to work, the respective file must be seekable.
 .SS Index
-Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3 by default.
+Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3, by default.
 .br
-See options -r, -x and -X.
+See options -r, -x and -X. By default, values are read from the index file as-is, that is, assumed to be in the host machine's native byte order. See -u and -U.
 .PP
 To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for START or END.
 A '*' that is not followed by any number will read the next value from whatever the current position of the index file is. This allows to read offset values from non-seekable resources.
@@ -106,8 +106,8 @@ Open FILE for writing and use it as output instead of the standard output. This 
 .br
 If the file does not exist it will be created. For overwriting a file see -t.
 .br
-By default, an attempt is made to seek to the end of the file before writing.
-When writing directly to a storage device, you will have to specify -w or -t as appending will write beyond bounds.
+By default, an attempt is made to seek to the end of the file before writing. Specify -z to prevent this.
+When writing directly to a storage device, you will have to specify one of -t, -w, -z as appending will write beyond bounds.
 .TP
 .B \-O \fIFD
 Write output to file descriptor FD instead of the standard output.
@@ -131,7 +131,7 @@ This should only be used if the input is not seekable and the data cannot be acc
 .B \-S
 Synchronize storage after each write. Requests that all data be written/flushed to the storage immediately instead of being buffered by the operating system.
 .br
-This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow slow storage.
+This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow storage.
 It can also reduce data loss during a lengthy copy process in case of a system crash.
 .br
 For maximum speed this option should be avoided. When using -o consider using -y or -Y instead.
@@ -152,9 +152,15 @@ Existing data within the new range will be preserved unless -t is also used.
 .br
 Resizing does not reposition the file's write pointer, whether it lies within the new range or not.
 .br
-When using -o without -t or -w, writing will start at the end of the resized file.
+When using -o without -t, -w or -z, writing will start at the end of the resized file.
 .br
 Note that '?' in the argument to -w will refer to the new file size, while for all other arguments it refers to the original size.
+.TP
+.B \-u
+Assume values in the index file are little-endian and convert them if the local native byte order differs.
+.TP
+.B \-U
+Assume values in the index file are big-endian and convert them if the local native byte order differs.
 .TP
 .B \-w POS
 Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write, counted from the beginning of the output file.
@@ -163,7 +169,7 @@ Note that if a file descriptor has been opened in append mode any write operatio
 .br
 Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes upon first write. Advanced file systems are able to accomplish this logically without using up physical disk space until something is actually written to the gap.
 .br
-Passing a '-' (dash) for POS prevents any seek operation on the output, see -o.
+Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 .TP
 .B \-x OFFSET
 Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the beginning of the index file pointing to the first index entry.
@@ -172,10 +178,19 @@ Use an offset for reading from the index array. Where OFFSET is a zero-based byt
 Read the index array from file descriptor FD instead of the default 3.
 .TP
 .B \-y
-When using -o, open the output file in data synchronized mode. This instructs the operating system not to buffer written data but flush it directly to the storage. Some file metadata, such as the modification timestamp may not be updated immediately. See also -S and -Y.
+Open the output file in data synchronized mode, when using -o.
+.br
+This instructs the operating system not to buffer written data but flush it directly to the storage. Some file metadata, such as the modification timestamp may not be updated immediately. See also -S and -Y.
 .TP
 .B \-Y
-When using -o, open the output file in fully synchronized mode. This is like -y but also synchronizes all file metadata immediately.
+Open the output file in fully synchronized mode, when using -o.
+.br
+This is like -y but also synchronizes all file metadata immediately.
+.TP
+.B \-z
+Do not automatically seek to the end of the output file.
+.br
+This is equivalent to passing '-' to -w and the default when not using -o.
 .SH EXAMPLES
 Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
 .IP
@@ -209,19 +224,19 @@ Extract the segment between the second and the third index entry:
 .br
 Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte offsets 8 and 16 in the index file, respectively.
 .IP
-bytecopy -i big.file *1 *2 3<big.file.idx > segment.file
+bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 .PP
 or equivalently:
 .IP
 bytecopy -i big.file -r big.file.idx ^2 > segment.file
 .PP
-Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes:
+Copy a disk image to a device, synchronized, with the input file size as limit to indicate progress:
 .IP
-zcat bootable.img.gz | bytecopy -Sb4M > /dev/sdX
+bytecopy -i disk.img -yzo /dev/sdX +:
 .PP
-Copy a disk image to a device, synchronized, with explicit range to indicate progress:
+Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the destination size as limit so progress indicates space used, while allowing the image to be shorter:
 .IP
-bytecopy -i disk.img -yo /dev/sdX -w0 +:
+zcat bootable.img.gz | bytecopy -SEb4M +? > /dev/sdX
 .SH AUTHOR
 Written by Johannes Schmitz
 .SH SOURCE
