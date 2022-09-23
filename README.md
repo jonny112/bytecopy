@@ -3,8 +3,8 @@ Copy byte arrays of arbitrary size from one file or device to another or between
 
 ## Usage
 ```sh
-bytecopy [OPTION]... [START] [END]
-bytecopy [OPTION]... [START] [+LENGTH]
+bytecopy [OPTION]... START [END]
+bytecopy [OPTION]... START [+LENGTH]
 bytecopy [OPTION]... [+LENGTH]
 ```
 See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.

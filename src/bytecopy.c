@@ -168,8 +168,8 @@ void printStats(struct ioStatus *io, char lineEnd) {
 
 void printUsage() {
     fprintf(stderr, 
-        "Usage: bytecopy [OPTION]... [START] [END]\n"
-        "       bytecopy [OPTION]... [START] [+LENGTH]\n"
+        "Usage: bytecopy [OPTION]... START [END]\n"
+        "       bytecopy [OPTION]... START [+LENGTH]\n"
         "       bytecopy [OPTION]... [+LENGTH]\n"
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
