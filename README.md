@@ -11,7 +11,7 @@ See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for
 
 ## Examples
 
-Exctract a range of bytes:
+Extract a range of bytes:
 ```sh
 bytecopy 1000 1300 < source.file > new.file
 ```
@@ -34,5 +34,5 @@ This program should compile in any POSIX compatible gcc/glibc environment using 
 
 ## Bugs
 
-Feel free to file issues and sugestions at:
+Feel free to file issues and suggestions at:
 https://github.com/jonny112/bytecopy/issues
