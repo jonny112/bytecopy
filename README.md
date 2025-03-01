@@ -30,15 +30,15 @@ echo "Earth" | bytecopy -o some.file -w 6 +5
 
 Copy from and to devices, monitoring progress:
 ```sh
-bytecopy -i /dev/sdX +: | xz > disk.img.xz
+bytecopy -i /dev/sdX +i | xz > disk.img.xz
 ```
 ```sh
-xzcat disk.img.xz | bytecopy -Eyzo /dev/sdX +?
+xzcat disk.img.xz | bytecopy -Eyzo /dev/sdX +o
 ```
 
 ## Installation
 
-This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile. It merely utilizes standard functions, no additional libraries are needed.
+This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile. It merely uses standard functions, no additional libraries are needed.
 
 ## Bugs
 
