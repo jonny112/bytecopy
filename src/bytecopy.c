@@ -2,7 +2,7 @@
  * bytecopy
  * GPL-3.0 License
  * 
- * J. Schmitz, 2022
+ * J. Schmitz, 2009-2025
  * 
  */
 
@@ -103,7 +103,11 @@ char seek(int fd, off64_t *pos, char *ref) {
     off64_t off = lseek64(fd, *pos, SEEK_SET);
     if (off != *pos) {
         msg("seeking to %" PRId64 " in %s failed: ", *pos, ref);
-        if (off == -1) msg("+%s\n", strerror(errno)); else msg("+actual position is %" PRId64 "\n", off);
+        if (off == -1) {
+            msg("+%s\n", strerror(errno));
+        } else {
+            msg("+actual position is %" PRId64 "\n", off);
+        }
         return 1;
     }
     *pos = off;
@@ -131,8 +135,8 @@ char parseOffset(char *opt, off64_t *pos, struct ioStatus *io) {
     int64_t offset = 0;
     bool in, add = true;
     
-    if (opt[0] == ':' || opt[0] == '?') {
-        in = opt[0] == ':';
+    if (opt[0] == 'i' || opt[0] == 'o') {
+        in = opt[0] == 'i';
         if (opt[1] != '\0') {
             if (opt[1] == '-') add = false;
             else if (opt[1] != '+') {
@@ -151,8 +155,8 @@ char parseOffset(char *opt, off64_t *pos, struct ioStatus *io) {
     }
 }
 
-void printFD(int fd, char c) {
-    msg("%c (", c);
+void printFD(int fd) {
+    msg("+(");
     switch (fd) {
         case STDIN_FILENO: msg("+stdin"); break;
         case STDOUT_FILENO: msg("+stdout"); break;
@@ -167,27 +171,28 @@ void printStats(struct ioStatus *io, char lineEnd) {
 }
 
 void printUsage() {
-    fprintf(stderr, 
+    fprintf(stderr,
         "Usage: bytecopy [OPTION]... START [END]\n"
         "       bytecopy [OPTION]... START [+LENGTH]\n"
         "       bytecopy [OPTION]... [+LENGTH]\n"
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
-        "    -b SIZE     set maximum I/O buffer size (default: 512K)\n"
+        "    -a SIZE     align read/write offsets to buffer block boundary (r: input, w: output)\n"
+        "    -b SIZE     set I/O buffer size (default: 512K)\n"
         "    -B          force buffering, do not write after partial read\n"
         "    -e          write final buffer even if empty\n"
         "    -E          do not consider premature end of input an error\n"
         "    -h          print this help and exit\n"
         "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
-        "    -I FD       read from a different file descriptor (default: standard input)\n"
+        "    -I FD       read from the specified file descriptor (default: standard input)\n"
         "    -n          print each progress report on a new line\n"
         "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
-        "    -O FD       write to a different file descriptor (default: standard output)\n"
+        "    -O FD       write to the specified file descriptor (default: standard output)\n"
         "    -q          don't print progress, only status messages to standard error\n"
         "    -Q          print no status, only errors to standard error (implies -q)\n"
         "    -r FILE     open FILE for reading index values (overrides -X)\n"
-        "    -s          skip (read and discard) input up to START instead of seeking\n"
+        "    -s          skip input (read and discard) up to START instead of seeking\n"
         "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
         "    -t          truncate (overwrite) output file (only works with -o)\n"
         "    -T SIZE     truncate or extend length of output file to SIZE, before copying\n"
@@ -195,18 +200,18 @@ void printUsage() {
         "    -U          assume big-endian byte order for index values\n"
         "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
         "    -x OFFSET   use OFFSET for reading index values\n"
-        "    -X FD       read index values from a different file descriptor (default: 3)\n"
-        "    -y          use data synchronized I/O mode on the output file (only works with -o)\n"
-        "    -Y          use fully synchronized I/O mode on the output file (only works with -o)\n"
-        "    -z          don't seek to end of output file (alias for -w -, default when not using -o)\n"
+        "    -X FD       read index values from the specified file descriptor (default: 3)\n"
+        "    -y          use data synchronized write mode (only works with -o)\n"
+        "    -Y          use fully synchronized write mode (only works with -o)\n"
+        "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
         "\n"
         "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
-        "LENGTH specifies the number of bytes to copy. This is added to START, if given, to obtain END.\n"
+        "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
         
         "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
         "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
-        "Placeholder ':' refers to the length of the input and '?' to the initial length of the output."
+        "Placeholder 'i' refers to the length of the input and 'o' to the initial length of the output."
         "\n"
         "Values may be specified as decimal or, prefixed with 0 as octal or, prefixed with 0x as hexadecimal.\n"
         "The suffixes K, M, G may be used to multiply a value by 1024, 1024^2 or 1024^3 respectively.\n"
@@ -214,8 +219,8 @@ void printUsage() {
         "Values for START and END may be read from an index, an array of 64-bit integers\n"
         "which are addressed using their zero-based position prefixed with '*'.\n"
         "As a shorthand, the range between two adjacent index values may be specified\n"
-        "by passing the zero-based position of the range prefixed with '^' as START.\n"
-        "Where the first range is from the beginning of the input to the first index value\n"
+        "by passing the zero-based position of the range prefixed with '^' as START,\n"
+        "where the first range is from the beginning of the input to the first index value\n"
         "and the last range is from the last index value to the end of input.\n"
     );
 }
@@ -225,8 +230,8 @@ int main(int argc, char **argv) {
     uint64_t pos = 0, total;
     off64_t offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
     bool bSeekStart = true, bStatus = true, bStatusLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
-    int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, bufferPos, rd, wr, rq;
-    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strOutSeek = NULL, *strOutTruncate = NULL, cProg = 0;
+    int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
+    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL, cProg = 0;
     struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0};
     
     // parse options
@@ -234,14 +239,27 @@ int main(int argc, char **argv) {
         { "help", 0, 0, 'h' },
         { 0, 0, 0, 0 }
     };
-    while ((opt = getopt_long(argc, argv, ":b:BeEhi:I:no:O:qQr:sStTuU:w:x:X:yYz", long_opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:qQr:sStT:uU:w:x:X:yYz", long_opts, NULL)) != -1) {
         if (opt == 'h') {
             printUsage();
             return 1;
+        } else if (opt == 'a') {
+            // align buffer
+            strAlign = optarg;
+            if (optarg[0] != 'r' && optarg[0] != 'w') {
+                if (parseNum(optarg, &num)) {
+                    opt = '!';
+                } else {
+                    blockSize = num;
+                }
+            }
         } else if (opt == 'b') {
             // buffer size
-            if (parseNum(optarg, &num)) opt = '!';
-            else bufferLen = num;
+            if (parseNum(optarg, &num)) {
+                opt = '!';
+            } else {
+                bufferLen = num;
+            }
             if (bufferLen < 1) {
                 msg("buffer size must be >0\n");
                 return 1;
@@ -341,26 +359,36 @@ int main(int argc, char **argv) {
             msg("failed to open resource file: %s: %s\n", pathRes, strerror(errno));
             return 1;
         }
-        if (bStatus) msg("* %s\n", pathRes);
+        if (bStatus) msg("index: %s\n", pathRes);
     }
     
     // open input
-    if (pathIn != NULL) {
-        if ((io.fdIn = open(pathIn, O_RDONLY)) == -1) {
-            msg("failed to open input file: %s: %s\n", pathIn, strerror(errno));
-            return 1;
+    if (pathIn != NULL && (io.fdIn = open(pathIn, O_RDONLY)) == -1) {
+        msg("failed to open input file: %s: %s\n", pathIn, strerror(errno));
+        return 1;
+    }
+    if (bStatus) {
+        msg("reading: ");
+        if (pathIn == NULL) {
+            printFD(io.fdIn);
+        } else {
+            msg("+%s\n", pathIn);
         }
-        if (bStatus) msg("< %s\n", pathIn);
-    } else if (bStatus) printFD(io.fdIn, '<');
+    }
     
     // open output
-    if (pathOut != NULL) {
-        if ((io.fdOut = open(pathOut, flagsOut, 0666)) == -1) {
-            msg("failed to open output file: %s: %s\n", pathOut, strerror(errno));
-            return 1;
+    if (pathOut != NULL && (io.fdOut = open(pathOut, flagsOut, 0666)) == -1) {
+        msg("failed to open output file: %s: %s\n", pathOut, strerror(errno));
+        return 1;
+    }
+    if (bStatus) {
+        msg("writing: ");
+        if (pathOut == NULL) {
+            printFD(io.fdOut);
+        } else {
+            msg("+%s\n", pathOut);
         }
-        if (bStatus) msg("> %s\n", pathOut);
-    } else if (bStatus) printFD(io.fdOut, '>');
+    }
     
     // parse range
     if (argc > optind) {
@@ -418,13 +446,20 @@ int main(int argc, char **argv) {
         return 1;
     }
     
-    // truncate output to length
+    // seek input
+    if (bSeekStart) {
+        if (seek(io.fdIn, &offStart, "input")) return 1;
+        pos = offStart;
+    }
+    
+    // truncate output
     if (strOutTruncate != NULL) {
         if (parseOffset(strOutTruncate, &num, &io)) return 1;
         if (ftruncate64(io.fdOut, num) == -1) {
             msg("failed to truncate output to %" PRId64 " bytes: %s\n", num, strerror(errno));
             return 1;
         }
+        if (bStatus) msg("output file truncated to %" PRId64 " bytes\n", num);
         io.lenOut = num;
     }
     
@@ -438,37 +473,51 @@ int main(int argc, char **argv) {
         offWrite = lseek64(io.fdOut, 0, SEEK_END);
     }
     
-    // seek input
-    if (bSeekStart) {
-        if (seek(io.fdIn, &offStart, "input")) return 1;
-        pos = offStart;
+    // buffer allignment
+    if (strAlign != NULL) {
+        if (strAlign[0] == 'r') blockSize = -offStart;
+        else if (strAlign[0] == 'w' && offWrite != -1) blockSize = -offWrite;
+        blockSize = ((blockSize % bufferLen) + bufferLen) % bufferLen;
     }
+    if (blockSize == 0) blockSize = bufferLen;
     
     // allocate buffer
     if (bStatus) {
-        msg("");
-        if (offStart > pos) msg("+..");
-        if (bSeekStart || offStart > 0) msg("+%" PRId64, offStart);
+        msg("range: ");
+        if (offStart > 0) {
+            if (offStart > pos) msg("+(skipping)..");
+            msg("+%" PRId64, offStart);
+        } else msg("+(current)");
         msg("+..");
     }
     if (offEnd >= 0) {
         total = offEnd - pos;
-        if (total < bufferLen) bufferLen = (total < 1 ? 1 : total);
-        if (bStatus) msg("+%" PRId64 " (%" PRId64 " bytes)", offEnd, offEnd - offStart);
-    }
+        if (total < bufferLen) { 
+            bufferLen = (total < 1 ? 1 : total);
+            if (blockSize > bufferLen) blockSize = bufferLen;
+        }
+        if (bStatus) {
+            msg("+%" PRId64, offEnd);
+            if (offStart > 0) msg("+ (%" PRId64 " bytes)", offEnd - offStart);
+        }
+    } else if (bStatus) msg("+(unbounded)");
     if (bStatus) {
         msg("+ -> ");
-        if (offWrite >= 0) msg("+%" PRId64, offWrite);
-        msg("+.. (buffer %d", bufferLen);
-        if (offEnd >= 0) msg("+ * %" PRIu64, total / bufferLen + (total % bufferLen ? 1 : 0));
-        msg("+)\n");
+        if (offWrite >= 0) msg("+%" PRId64, offWrite); else msg(flagsOut & O_TRUNC ? "+(truncated)" : "+(default)");
+        msg("+..");
+        if (offWrite >= 0 && offEnd >= 0) msg("+%" PRId64, offWrite + (offEnd - offStart));
+        msg("+ at ");
+        if (blockSize != bufferLen) msg("+%d + ", blockSize);
+        msg("+%d bytes", bufferLen);
+        if (offEnd >= 0) msg("+ * %" PRIu64, ((total - (blockSize < bufferLen ? blockSize : 0)) + bufferLen - 1) / bufferLen);
+        msg("+\n");
     }
     io.buffer = malloc(bufferLen);
     
     // copy
     bufferPos = 0;
     do {
-        rq = (offEnd >= 0 && (pos + bufferLen) > offEnd ? offEnd - pos : bufferLen) - bufferPos;
+        rq = (offEnd >= 0 && (pos + bufferLen) > offEnd ? offEnd - pos : blockSize) - bufferPos;
         rd = read(io.fdIn, io.buffer + bufferPos, rq);
         io.rd++;
         if (rd < 0) break;
@@ -489,6 +538,7 @@ int main(int argc, char **argv) {
                 io.out += wr;
             } else wr = rq = 0;
             bufferPos = 0;
+            blockSize = bufferLen;
         }
         // progress
         if (cProg >= 0) {

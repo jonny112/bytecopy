@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "September 2022" UNIX "User Commands"
+.TH BYTECOPY 1 "February 2025" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -11,25 +11,24 @@ bytecopy \- copy bytes between files
 .B bytecopy
 [\fIOPTION\fR]... [+\fILENGTH\fR]
 .SH DESCRIPTION
-Copy arbitrary ranges of bytes from one file to another or between different locations in the same file.
+Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
 .br
 A file means any regular or special file or open file descriptor on which read or write operations may be performed.
 .br
-The files as well as the range to copy may be of any size within operating system and file system limits.
+The files as well as the range to copy can be of any size within operating system and file system limits.
 .PP
 \fISTART\fR is the zero-based offset of the first byte to copy, counted from the beginning of the input file.
 .br
-If not specified, no initial seek operation will be performed on the input (see also -s).
+If not specified, no initial seek operation is performed on the input (see also -s).
 .PP
-\fIEND\fR is the zero-based offset at which the copy process shall end.
-This means the first byte not to be copied, counted from the beginning of the input file.
-The location may be one after the last byte in the file.
+\fIEND\fR is the zero-based offset at which copying shall end (the first byte not to be copied) counted from the beginning of the input file.
+To include the last byte this number has to be equal to the total number of bytes in the file.
 .br
-If not specified, the copy operation is unbounded and will continue until the end of input. That is, until a read operation returns no data.
+If not specified, the copy process is unbounded and will continue until the end of input. That is, until a read operation returns no data.
 .br
-Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing is copied, but must not be smaller.
+Subtracting END form START yields the total number of bytes to copy. END may be equal to START (in which case nothing is copied) but must not be smaller.
 .PP
-\fILENGTH\fR is the number of bytes to be copied. Prefixed with a '+' (plus sign), this may be specified alternatively to END, while the corresponding value for END is calculated by adding LENGTH to START.
+\fILENGTH\fR is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the corresponding value for END is obtained by adding LENGTH to START.
 .PP
 When START is omitted, END is equivalent to LENGTH.
 .br
@@ -51,9 +50,9 @@ M    1024 * 1024
 .br
 G    1024 * 1024 * 1024
 .SS Relative offsets
-The values for START, END, LENGTH as well as options -T and -w may refer to the current size of a file, using ':' (colon) for input or '?' (question mark) for output. Additionally, a negative or positive offset may be specified. For example, with a START value of ':-1024' copying will begin 1024 bytes before the end of the input file, and an END (LENGTH) value of '+?+0x80' would copy 128 bytes more than currently are in the output file.
+The values for START, END, LENGTH as well as options -T and -w may be specified relative to the current size of either the input file or the output file, using placeholders 'i' or 'o' respectively. Additionally, a negative or positive offset may be specified. For example, with a START value of 'i-1024' copying will begin 1024 bytes before the end of the input file, and a LENGTH value of '+o+0x80' would copy 128 bytes more than currently are in the output file.
 .br
-For this to work, the respective file must be seekable.
+For this to work, the referenced file must be seekable.
 .SS Index
 Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3, by default.
 .br
@@ -69,6 +68,17 @@ Range positions are derived as follows (example for an index with three entries)
 <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
 .SH OPTIONS
 .TP
+.B \-a \fISIZE
+Align reading or writing to the buffer block boundary. That is, if the offset from the beginning of the file is not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so that this becomes the case for subsequent cycles. This does not change the amount or position of the data being copied but may add an additional read/write cycle for the adjustment.
+.br
+SIZE may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position after the initial seek operation, see -o, and -w).
+.br
+If SIZE is a positive number it specifies the immediate length of the initial copy cycle. A negative number reduces the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this boundary in case SIZE should be larger.
+.br
+In certain cases -B will have to be used for this option to be effective.
+.br
+This option has no effect in case it references an offset that is not specified or 0.
+.TP
 .B \-b \fISIZE
 Set the maximum number of bytes to be buffered during one read/write cycle.
 .br
@@ -79,7 +89,7 @@ If the total number of bytes to copy is known and smaller than SIZE, the buffer 
 Always fill the entire buffer before writing, unless END or the end of input has been reached.
 .br
 Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output immediately.
-Partial reads may occur when reading form remote resources or terminals but usually are of no concern for regular files and local storage devices.
+Partial reads may occur when reading from network resources or terminals but usually are of no concern for regular files and local storage devices.
 .TP
 .B \-e
 Write the final buffer even if it is empty. That is, perform a write operation even if the byte count is zero.
@@ -87,7 +97,7 @@ The effect of this, if any, depends on the underlying device and its configurati
 .TP
 .B \-E
 In case the number of bytes to copy is specified (END or LENGTH given), do not consider a premature end of input an error.
-Otherwise, an error is reported if not all bytes could be read.
+By default, an error is reported if not all bytes could be read.
 .TP
 .B \-h
 Print options and usage summary, then exit.
@@ -99,7 +109,7 @@ Open FILE for reading and use it as input instead of the standard input. This ov
 Read input from file descriptor FD instead of the standard input.
 .TP
 .B \-n
-Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed after each read/write cycle and normally overwrites the previous one.
+Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed after each read/write cycle and by default overwrites the previous one.
 .TP
 .B \-o \fIFILE
 Open FILE for writing and use it as output instead of the standard output. This overrides -O.
@@ -107,6 +117,7 @@ Open FILE for writing and use it as output instead of the standard output. This 
 If the file does not exist it will be created. For overwriting a file see -t.
 .br
 By default, an attempt is made to seek to the end of the file before writing. Specify -z to prevent this.
+.br
 When writing directly to a storage device, you will have to specify one of -t, -w, -z as appending will write beyond bounds.
 .TP
 .B \-O \fIFD
@@ -130,11 +141,12 @@ This should only be used if the input is not seekable and the data cannot be acc
 .TP
 .B \-S
 Synchronize storage after each write. Requests that all data be written/flushed to the storage immediately instead of being buffered by the operating system.
-.br
 This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow storage.
-It can also reduce data loss during a lengthy copy process in case of a system crash.
+A removable device (which is neither mounted nor used by any other process!) may be detached directly after the copy process ends without losing data.
 .br
-For maximum speed this option should be avoided. When using -o consider using -y or -Y instead.
+This option will increase system load due to additional syscalls and slightly decrease the overall copy speed. Using larger buffers (-b) may mitigate this effect.
+.br
+Whenever possible consider using -o with -y or -Y instead.
 .TP
 .B \-t
 Truncate the output file if it already exists, upon opening with -o.
@@ -154,7 +166,7 @@ Resizing does not reposition the file's write pointer, whether it lies within th
 .br
 When using -o without -t, -w or -z, writing will start at the end of the resized file.
 .br
-Note that '?' in the argument to -w will refer to the new file size, while for all other arguments it refers to the original size.
+Note that placeholder 'o' in the argument to -w will refer to the new file size, while for all other arguments it refers to the original size.
 .TP
 .B \-u
 Assume values in the index file are little-endian and convert them if the local native byte order differs.
@@ -192,7 +204,7 @@ Do not automatically seek to the end of the output file.
 .br
 This is equivalent to passing '-' to -w and the default when not using -o.
 .SH EXAMPLES
-Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
+Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
 .IP
 bytecopy 1000 1300 < source.file > new.file
 .PP
@@ -202,13 +214,21 @@ bytecopy 1000 +300 < source.file > new.file
 .PP
 or equivalently:
 .IP
+bytecopy -i source.file 1000 +300 > new.file
+.PP
+or equivalently:
+.IP
 bytecopy -i source.file -to new.file 1000 +300
 .PP
-Copy 1048576 bytes of random data to a file:
-.br
-Repeating this command will append one more megabyte to the output file each time.
+where -t causes the output file (-o) to be overwritten if it already exists.
+.PP
+Repeating the following command will append one more kilobyte of random data to the output file each time:
 .IP
-bytecopy -o output.file +1M < /dev/urandom
+bytecopy -o output.file +1K < /dev/urandom
+.PP
+equivalently:
+.IP
+bytecopy -i /dev/urandom +1K >> output.file
 .PP
 Update contents of a file:
 .IP
@@ -228,15 +248,15 @@ bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 .PP
 or equivalently:
 .IP
-bytecopy -i big.file -r big.file.idx ^2 > segment.file
+bytecopy -r big.file.idx -i big.file ^2 > segment.file
 .PP
-Copy a disk image to a device, synchronized, with the input file size as limit to indicate progress:
+Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to indicate progress:
 .IP
-bytecopy -i disk.img -yzo /dev/sdX +:
+bytecopy -i disk.img -yzo /dev/sdX +i
 .PP
-Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the destination size as limit so progress indicates space used, while allowing the image to be shorter:
+Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the destination size as limit so progress indicates space used, while allowing the image to be smaller (-E):
 .IP
-zcat bootable.img.gz | bytecopy -SEb4M +? > /dev/sdX
+zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
 .SH AUTHOR
 Written by Johannes Schmitz
 .SH SOURCE

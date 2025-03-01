@@ -1,5 +1,5 @@
 # bytecopy
-Copy byte arrays of arbitrary size from one file or device to another or between different locations in the same file. Extract a file segment to a new file or update a segment within an existing file.
+Copy byte segments of arbitrary size from one file or device to another or between different locations in the same file.
 
 ## Usage
 ```sh
@@ -26,6 +26,14 @@ Update contents of a file:
 ```sh
 echo "Hello World!" > some.file
 echo "Earth" | bytecopy -o some.file -w 6 +5
+```
+
+Copy from and to devices, monitoring progress:
+```sh
+bytecopy -i /dev/sdX +: | xz > disk.img.xz
+```
+```sh
+xzcat disk.img.xz | bytecopy -Eyzo /dev/sdX +?
 ```
 
 ## Installation

@@ -1,4 +1,4 @@
-BYTECOPY(1)                                             User Commands                                            BYTECOPY(1)
+BYTECOPY(1)                                              User Commands                                              BYTECOPY(1)
 
 NAME
        bytecopy - copy bytes between files
@@ -9,22 +9,22 @@ SYNOPSIS
        bytecopy [OPTION]... [+LENGTH]
 
 DESCRIPTION
-       Copy arbitrary ranges of bytes from one file to another or between different locations in the same file.
+       Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
        A file means any regular or special file or open file descriptor on which read or write operations may be performed.
-       The files as well as the range to copy may be of any size within operating system and file system limits.
+       The files as well as the range to copy can be of any size within operating system and file system limits.
 
        START is the zero-based offset of the first byte to copy, counted from the beginning of the input file.
-       If not specified, no initial seek operation will be performed on the input (see also -s).
+       If not specified, no initial seek operation is performed on the input (see also -s).
 
-       END is the zero-based offset at which the copy process shall end.  This means the first byte not to be copied,
-       counted from the beginning of the input file.  The location may be one after the last byte in the file.
-       If not specified, the copy operation is unbounded and will continue until the end of input. That is, until a read
+       END is the zero-based offset at which copying shall end (the first byte not to be copied) counted from the beginning of
+       the input file.  To include the last byte this number has to be equal to the total number of bytes in the file.
+       If not specified, the copy process is unbounded and will continue until the end of input. That is, until a read
        operation returns no data.
-       Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing
-       is copied, but must not be smaller.
+       Subtracting END form START yields the total number of bytes to copy. END may be equal to START (in which case nothing is
+       copied) but must not be smaller.
 
-       LENGTH is the number of bytes to be copied. Prefixed with a '+' (plus sign), this may be specified alternatively to
-       END, while the corresponding value for END is calculated by adding LENGTH to START.
+       LENGTH is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the
+       corresponding value for END is obtained by adding LENGTH to START.
 
        When START is omitted, END is equivalent to LENGTH.
        Passing a '-' (dash) in place of START or END is equivalent to omitting them.
@@ -42,11 +42,11 @@ DESCRIPTION
               G    1024 * 1024 * 1024
 
    Relative offsets
-       The values for START, END, LENGTH as well as options -T and -w may refer to the current size of a file, using ':'
-       (colon) for input or '?' (question mark) for output. Additionally, a negative or positive offset may be specified.
-       For example, with a START value of ':-1024' copying will begin 1024 bytes before the end of the input file, and an
-       END (LENGTH) value of '+?+0x80' would copy 128 bytes more than currently are in the output file.
-       For this to work, the respective file must be seekable.
+       The values for START, END, LENGTH as well as options -T and -w may be specified relative to the current size of either
+       the input file or the output file, using placeholders 'i' or 'o' respectively. Additionally, a negative or positive
+       offset may be specified. For example, with a START value of 'i-1024' copying will begin 1024 bytes before the end of the
+       input file, and a LENGTH value of '+o+0x80' would copy 128 bytes more than currently are in the output file.
+       For this to work, the referenced file must be seekable.
 
    Index
        Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an
@@ -54,32 +54,45 @@ DESCRIPTION
        See options -r, -x and -X. By default, values are read from the index file as-is, that is, assumed to be in the host
        machine's native byte order. See -u and -U.
 
-       To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for
-       START or END.  A '*' that is not followed by any number will read the next value from whatever the current position
-       of the index file is. This allows to read offset values from non-seekable resources.
+       To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for START
+       or END.  A '*' that is not followed by any number will read the next value from whatever the current position of the
+       index file is. This allows to read offset values from non-seekable resources.
 
-       As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed
-       with a '^' (caret) may be passed for START, overriding END.
+       As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a
+       '^' (caret) may be passed for START, overriding END.
        Range positions are derived as follows (example for an index with three entries):
 
               <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
 
 OPTIONS
+       -a SIZE
+              Align reading or writing to the buffer block boundary. That is, if the offset from the beginning of the file is
+              not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so that this
+              becomes the case for subsequent cycles. This does not change the amount or position of the data being copied but
+              may add an additional read/write cycle for the adjustment.
+              SIZE may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
+              after the initial seek operation, see -o, and -w).
+              If SIZE is a positive number it specifies the immediate length of the initial copy cycle. A negative number
+              reduces the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this
+              boundary in case SIZE should be larger.
+              In certain cases -B will have to be used for this option to be effective.
+              This option has no effect in case it references an offset that is not specified or 0.
+
        -b SIZE
               Set the maximum number of bytes to be buffered during one read/write cycle.
               The default is 512K = 524288 bytes.  If the total number of bytes to copy is known and smaller than SIZE, the
               buffer will be automatically decreased to the required length.
 
        -B     Always fill the entire buffer before writing, unless END or the end of input has been reached.
-              Normally, if a single read operation does not fill the buffer completely, whatever has been read will be
-              output immediately.  Partial reads may occur when reading form remote resources or terminals but usually are
-              of no concern for regular files and local storage devices.
+              Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output
+              immediately.  Partial reads may occur when reading from network resources or terminals but usually are of no
+              concern for regular files and local storage devices.
 
        -e     Write the final buffer even if it is empty. That is, perform a write operation even if the byte count is zero.
               The effect of this, if any, depends on the underlying device and its configuration/implementation.
 
-       -E     In case the number of bytes to copy is specified (END or LENGTH given), do not consider a premature end of
-              input an error.  Otherwise, an error is reported if not all bytes could be read.
+       -E     In case the number of bytes to copy is specified (END or LENGTH given), do not consider a premature end of input
+              an error.  By default, an error is reported if not all bytes could be read.
 
        -h     Print options and usage summary, then exit.
 
@@ -88,8 +101,8 @@ OPTIONS
 
        -I FD  Read input from file descriptor FD instead of the standard input.
 
-       -n     Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed
-              after each read/write cycle and normally overwrites the previous one.
+       -n     Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed after
+              each read/write cycle and by default overwrites the previous one.
 
        -o FILE
               Open FILE for writing and use it as output instead of the standard output. This overrides -O.
@@ -108,15 +121,17 @@ OPTIONS
        -r FILE
               Open FILE for reading and use it as resource for the index array. This overrides -X.
 
-       -s     Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach
-              START instead of directly seeking to that position.
+       -s     Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach START
+              instead of directly seeking to that position.
               This should only be used if the input is not seekable and the data cannot be accessed by other means.
 
        -S     Synchronize storage after each write. Requests that all data be written/flushed to the storage immediately
-              instead of being buffered by the operating system.
-              This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow
-              storage.  It can also reduce data loss during a lengthy copy process in case of a system crash.
-              For maximum speed this option should be avoided. When using -o consider using -y or -Y instead.
+              instead of being buffered by the operating system.  This is useful to minimize cache usage and improve progress
+              monitoring when copying from a fast to a slow storage.  A removable device (which is neither mounted nor used by
+              any other process!) may be detached directly after the copy process ends without losing data.
+              This option will increase system load due to additional syscalls and slightly decrease the overall copy speed.
+              Using larger buffers (-b) may mitigate this effect.
+              Whenever possible consider using -o with -y or -Y instead.
 
        -t     Truncate the output file if it already exists, upon opening with -o.
               All data in the file will be discarded and the file size will be set to zero.
@@ -128,8 +143,8 @@ OPTIONS
               Existing data within the new range will be preserved unless -t is also used.
               Resizing does not reposition the file's write pointer, whether it lies within the new range or not.
               When using -o without -t, -w or -z, writing will start at the end of the resized file.
-              Note that '?' in the argument to -w will refer to the new file size, while for all other arguments it refers
-              to the original size.
+              Note that placeholder 'o' in the argument to -w will refer to the new file size, while for all other arguments it
+              refers to the original size.
 
        -u     Assume values in the index file are little-endian and convert them if the local native byte order differs.
 
@@ -137,12 +152,12 @@ OPTIONS
 
        -w POS Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write,
               counted from the beginning of the output file.
-              Note that if a file descriptor has been opened in append mode any write operation will commence at the end of
-              the file regardless of a previous seek. So, for this option to work correctly you need to either open the
-              output file using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
-              Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes
-              upon first write. Advanced file systems are able to accomplish this logically without using up physical disk
-              space until something is actually written to the gap.
+              Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the
+              file regardless of a previous seek. So, for this option to work correctly you need to either open the output file
+              using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
+              Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes upon
+              first write. Advanced file systems are able to accomplish this logically without using up physical disk space
+              until something is actually written to the gap.
               Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 
        -x OFFSET
@@ -162,7 +177,7 @@ OPTIONS
               This is equivalent to passing '-' to -w and the default when not using -o.
 
 EXAMPLES
-       Extract a section of 300 bytes, starting at offset 1000, from the input file to a new file:
+       Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
 
               bytecopy 1000 1300 < source.file > new.file
 
@@ -172,12 +187,21 @@ EXAMPLES
 
        or equivalently:
 
+              bytecopy -i source.file 1000 +300 > new.file
+
+       or equivalently:
+
               bytecopy -i source.file -to new.file 1000 +300
 
-       Copy 1048576 bytes of random data to a file:
-       Repeating this command will append one more megabyte to the output file each time.
+       where -t causes the output file (-o) to be overwritten if it already exists.
 
-              bytecopy -o output.file +1M < /dev/urandom
+       Repeating the following command will append one more kilobyte of random data to the output file each time:
+
+              bytecopy -o output.file +1K < /dev/urandom
+
+       equivalently:
+
+              bytecopy -i /dev/urandom +1K >> output.file
 
        Update contents of a file:
 
@@ -189,23 +213,24 @@ EXAMPLES
               echo "Earth" | bytecopy -o some.file -w6 +5
 
        Extract the segment between the second and the third index entry:
-       Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte
-       offsets 8 and 16 in the index file, respectively.
+       Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte offsets
+       8 and 16 in the index file, respectively.
 
               bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 
        or equivalently:
 
-              bytecopy -i big.file -r big.file.idx ^2 > segment.file
+              bytecopy -r big.file.idx -i big.file ^2 > segment.file
 
-       Copy a disk image to a device, synchronized, with the input file size as limit to indicate progress:
+       Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to
+       indicate progress:
 
-              bytecopy -i disk.img -yzo /dev/sdX +:
+              bytecopy -i disk.img -yzo /dev/sdX +i
 
        Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the
-       destination size as limit so progress indicates space used, while allowing the image to be shorter:
+       destination size as limit so progress indicates space used, while allowing the image to be smaller (-E):
 
-              zcat bootable.img.gz | bytecopy -SEb4M +? > /dev/sdX
+              zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
 
 AUTHOR
        Written by Johannes Schmitz
@@ -213,4 +238,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                   September 2022                                            BYTECOPY(1)
+UNIX                                                     February 2025                                              BYTECOPY(1)
