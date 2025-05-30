@@ -162,7 +162,7 @@ Writing will begin at the start of the file, even if its size is increased again
 .br
 For special/device files this will have no effect other than writing starting at the beginning.
 .TP
-.B \-T SIZE
+.B \-T \fISIZE
 Set the length of the output file to SIZE before copying. This may shirk or grow the file.
 .br
 Existing data within the new range will be preserved unless -t is also used.
@@ -179,7 +179,7 @@ Assume values in the index file are little-endian and convert them if the local 
 .B \-U
 Assume values in the index file are big-endian and convert them if the local native byte order differs.
 .TP
-.B \-w POS
+.B \-w \fIPOS
 Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write, counted from the beginning of the output file.
 .br
 Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the file regardless of a previous seek. So, for this option to work correctly you need to either open the output file using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
@@ -188,10 +188,10 @@ Seeking to a position beyond the end of a regular file is legit and the gap will
 .br
 Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 .TP
-.B \-x OFFSET
+.B \-x \fIOFFSET
 Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the beginning of the index file pointing to the first index entry.
 .TP
-.B \-X FD
+.B \-X \fIFD
 Read the index array from file descriptor FD instead of the default 3.
 .TP
 .B \-y
