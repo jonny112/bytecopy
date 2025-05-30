@@ -35,6 +35,7 @@ struct ioStatus {
     int fdOut;
     int fdIdx;
     char endian;
+    char prog;
     void *buffer;
 };
 
@@ -166,8 +167,14 @@ void printFD(int fd) {
     msg("+)\n");
 }
 
-void printStats(struct ioStatus *io, char lineEnd) {
-    msg("reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes%c", io->rd, io->wr, io->in, io->out, lineEnd);
+void printStats(struct ioStatus *io, off64_t total, char lineEnd) {
+    msg("reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes", io->rd, io->wr, io->in, io->out);
+    if (total != -1) {
+        if (io->prog > 1) fprintf(stderr, " of %" PRId64, total);
+        fprintf(stderr, " (%.1f%%)", total == 0 ? 100.0 : (int)((float)io->in / total * 1000) / 10.0);
+    }
+    fprintf(stderr, "%c", lineEnd);
+    if (io->prog < 1) io->prog = 1;
 }
 
 void printUsage() {
@@ -189,8 +196,9 @@ void printUsage() {
         "    -n          print each progress report on a new line\n"
         "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
         "    -O FD       write to the specified file descriptor (default: standard output)\n"
+        "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
         "    -q          don't print progress, only status messages to standard error\n"
-        "    -Q          print no status, only errors to standard error (implies -q)\n"
+        "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
         "    -r FILE     open FILE for reading index values (overrides -X)\n"
         "    -s          skip input (read and discard) up to START instead of seeking\n"
         "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
@@ -227,19 +235,18 @@ void printUsage() {
 
 int main(int argc, char **argv) {
     int64_t num;
-    uint64_t pos = 0, total;
-    off64_t offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
-    bool bSeekStart = true, bStatus = true, bStatusLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
+    off64_t pos = 0, total = -1, offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
+    bool bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
-    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL, cProg = 0;
-    struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0};
+    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL;
+    struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
     
     // parse options
     static const struct option long_opts[] = {
         { "help", 0, 0, 'h' },
         { 0, 0, 0, 0 }
     };
-    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:qQr:sStT:uU:w:x:X:yYz", long_opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pqQr:sStT:uU:w:x:X:yYz", long_opts, NULL)) != -1) {
         if (opt == 'h') {
             printUsage();
             return 1;
@@ -280,20 +287,24 @@ int main(int argc, char **argv) {
             // input fd
             io.fdIn = atoi(optarg);
         } else if (opt == 'n') {
-            // line-feed after status
-            bStatusLF = true;
+            // line-feed after progress
+            bProgLF = true;
         } else if (opt == 'o') {
             // output file
             pathOut = optarg;
         } else if (opt == 'O') {
             // output fd
             io.fdOut = atoi(optarg);
-        } else if (opt == 'q') {
+        } else if (opt == 'p') {
+            // progress only
+            bStatus = false;
+            io.prog = 2;            
+        } else if (opt == 'q' && io.prog < 1) {
             // no progress
-            cProg = -1;
-        } else if (opt == 'Q') {
+            io.prog = -1;
+        } else if (opt == 'Q' && io.prog < 1) {
             // errors only
-            cProg = -1;
+            io.prog = -1;
             bStatus = false;
         } else if (opt == 'r') {
             // resource file
@@ -509,13 +520,14 @@ int main(int argc, char **argv) {
         msg("+ at ");
         if (blockSize != bufferLen) msg("+%d + ", blockSize);
         msg("+%d bytes", bufferLen);
-        if (offEnd >= 0) msg("+ * %" PRIu64, ((total - (blockSize < bufferLen ? blockSize : 0)) + bufferLen - 1) / bufferLen);
+        if (total != -1) msg("+ * %" PRId64, ((total - (blockSize < bufferLen ? blockSize : 0)) + bufferLen - 1) / bufferLen);
         msg("+\n");
     }
     io.buffer = malloc(bufferLen);
     
     // copy
     bufferPos = 0;
+    if (io.prog > 1) printStats(&io, total, bProgLF ? '\n' : ' ');
     do {
         rq = (offEnd >= 0 && (pos + bufferLen) > offEnd ? offEnd - pos : blockSize) - bufferPos;
         rd = read(io.fdIn, io.buffer + bufferPos, rq);
@@ -541,18 +553,15 @@ int main(int argc, char **argv) {
             blockSize = bufferLen;
         }
         // progress
-        if (cProg >= 0) {
-            if (!bStatusLF) fprintf(stderr, "\r");
-            printStats(&io, ' ');
-            if (offEnd >= 0) fprintf(stderr, "(%.1f%%) ", total == 0 ? 100.0 : (float)io.in / total * 100);
-            if (bStatusLF) fprintf(stderr, "\n");
-            cProg = 1;
+        if (io.prog >= 0) {
+            if (!bProgLF) fprintf(stderr, "\r");
+            printStats(&io, total, bProgLF ? '\n' : ' ');
         }
     } while (rd && (offEnd < 0 || pos < offEnd));
     
     // final stats
-    if (cProg > 0 && !bStatusLF) fprintf(stderr, "\n");
-    if (bStatus && cProg < 0) printStats(&io, '\n');
+    if (io.prog > 0 && !bProgLF) fprintf(stderr, "\n");
+    if (bStatus && io.prog < 0) printStats(&io, -1, '\n');
     
     // error handling
     if (rd < 0) {

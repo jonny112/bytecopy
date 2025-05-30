@@ -113,6 +113,9 @@ OPTIONS
 
        -O FD  Write output to file descriptor FD instead of the standard output.
 
+       -p     Report progress on standard error, but no other status messages except errors.
+              This overrides both -q and -Q. See also -n.
+
        -q     Be quiet. Do not report progress.
               By default, statistics are printed to standard error after each read/write cycle.
 
@@ -220,7 +223,7 @@ EXAMPLES
 
        or equivalently:
 
-              bytecopy -r big.file.idx -i big.file ^2 > segment.file
+              bytecopy -r big.file.idx -i big.file -to segment.file ^2
 
        Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to
        indicate progress:
@@ -238,4 +241,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                     February 2025                                              BYTECOPY(1)
+UNIX                                                        May 2025                                                BYTECOPY(1)

@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "February 2025" UNIX "User Commands"
+.TH BYTECOPY 1 "May 2025" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -122,6 +122,11 @@ When writing directly to a storage device, you will have to specify one of -t, -
 .TP
 .B \-O \fIFD
 Write output to file descriptor FD instead of the standard output.
+.TP
+.B \-p
+Report progress on standard error, but no other status messages except errors.
+.br
+This overrides both -q and -Q. See also -n.
 .TP
 .B \-q
 Be quiet. Do not report progress.
@@ -248,7 +253,7 @@ bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 .PP
 or equivalently:
 .IP
-bytecopy -r big.file.idx -i big.file ^2 > segment.file
+bytecopy -r big.file.idx -i big.file -to segment.file ^2
 .PP
 Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to indicate progress:
 .IP
