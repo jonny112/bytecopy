@@ -77,12 +77,14 @@ char parseNum(char *str, int64_t *n) {
 char readIdx(struct ioStatus *io, off64_t *offset, int64_t idx, int64_t *val) {
     int n = (offset == NULL ? read(io->fdIdx, val, 8) : pread(io->fdIdx, val, 8, *offset + idx * 8));
     if (n == 0) {
-        *val = -1;
+        if (*val == -1) return 0;
+        msg("entry %" PRId64 " beyond end of index\n", idx);
+        return 1;
     } else if (n < 0) {
-        msg("error reading index %" PRId64 ": %s\n", idx, strerror(errno));
+        msg("error reading index entry %" PRId64 ": %s\n", idx, strerror(errno));
         return 1;
     } else if (n < 8) {
-        msg("index %" PRId64 " could not be fully read\n", idx);
+        msg("index entry %" PRId64 " could not be fully read\n", idx);
         return 1;
     }
     if (io->endian == 'u') {
@@ -95,9 +97,8 @@ char readIdx(struct ioStatus *io, off64_t *offset, int64_t idx, int64_t *val) {
 
 char readIdxStr(struct ioStatus *io, off64_t *offset, char *strIdx, int64_t *idx, int64_t *val) {
     if (strIdx[0] != '\0' && parseNum(strIdx, idx)) return 1;
-    char rslt = readIdx(io, strIdx[0] == '\0' ? NULL : offset, *idx, val);
-    if (rslt == 1) msg("at end of input trying to read index %" PRId64 "\n", *idx);
-    return rslt;
+    *val = 0;
+    return readIdx(io, strIdx[0] == '\0' ? NULL : offset, *idx, val);
 }
 
 char seek(int fd, off64_t *pos, char *ref) {
@@ -411,12 +412,14 @@ int main(int argc, char **argv) {
             // end
             if (readIdx(&io, &offIdx, num, &offEnd)) return 1;
         } else {
+            num = 0;
+            
             // start
             if (argv[optind][0] != '-' && argv[optind][0] != '+') {
                 if (argv[optind][0] == '*') {
                     // from index
-                    num = 0;
                     if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return 1;
+                    if (argv[optind][1] == '\0') num = 1;
                 } else {
                     // direct or relative to end
                     if (parseOffset(argv[optind], &offStart, &io)) return 1;
@@ -430,7 +433,6 @@ int main(int argc, char **argv) {
             if (argc > ++optind && argv[optind][0] != '-') {
                 if (argv[optind][0] == '*') {
                     // from index
-                    num = 1;
                     if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return 1;
                 } else if (argv[optind][0] == '+') {
                     // offset
