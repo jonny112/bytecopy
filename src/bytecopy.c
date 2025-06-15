@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
         { "help", 0, 0, 'h' },
         { 0, 0, 0, 0 }
     };
-    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pqQr:sStT:uU:w:x:X:yYz", long_opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pqQr:sStT:uUw:x:X:yYz", long_opts, NULL)) != -1) {
         if (opt == 'h') {
             printUsage();
             return 1;
