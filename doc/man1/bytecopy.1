@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "May 2025" UNIX "User Commands"
+.TH BYTECOPY 1 "July 2025" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -56,12 +56,14 @@ For this to work, the referenced file must be seekable.
 .SS Index
 Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3, by default.
 .br
-See options -r, -x and -X. By default, values are read from the index file as-is, that is, assumed to be in the host machine's native byte order. See -u and -U.
+See options -P, -x, -X and -Z. 
+.br
+Values from the index file are read as-is, by default, that is, assumed to be in the host machine's native byte order. See -u and -U.
 .PP
 To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for START or END.
 A '*' that is not followed by any number will read the next value from whatever the current position of the index file is. This allows to read offset values from non-seekable resources.
 .PP
-As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a '^' (caret) may be passed for START, overriding END.
+As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
 .br
 Range positions are derived as follows (example for an index with three entries):
 .IP
@@ -69,7 +71,7 @@ Range positions are derived as follows (example for an index with three entries)
 .SH OPTIONS
 .TP
 .B \-a \fISIZE
-Align reading or writing to the buffer block boundary. That is, if the offset from the beginning of the file is not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so that this becomes the case for subsequent cycles. This does not change the amount or position of the data being copied but may add an additional read/write cycle for the adjustment.
+Align reading or writing to the boundary of the buffered block. That is, if the starting offset for the copy operation is not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so that this becomes the case for subsequent cycles. This does not change the amount or position of the data being copied but may add an additional read/write cycle for the adjustment.
 .br
 SIZE may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position after the initial seek operation, see -o, and -w).
 .br
@@ -128,6 +130,9 @@ Report progress on standard error, but no other status messages except errors.
 .br
 This overrides both -q and -Q. See also -n.
 .TP
+.B \-P \fIPOS
+Position of the index array in the index file. Where POS is a zero-based byte position counted form the beginning of the file pointing to the first index entry. Defaults to 0.
+.TP
 .B \-q
 Be quiet. Do not report progress.
 .br
@@ -135,9 +140,6 @@ By default, statistics are printed to standard error after each read/write cycle
 .TP
 .B \-Q
 Be more quiet. Do not print any progress or status messages, only errors, to standard error.
-.TP
-.B \-r \fIFILE
-Open FILE for reading and use it as resource for the index array. This overrides -X.
 .TP
 .B \-s
 Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach START instead of directly seeking to that position.
@@ -188,8 +190,8 @@ Seeking to a position beyond the end of a regular file is legit and the gap will
 .br
 Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 .TP
-.B \-x \fIOFFSET
-Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the beginning of the index file pointing to the first index entry.
+.B \-x \fIFILE
+Open FILE for reading the index array. This overrides -X.
 .TP
 .B \-X \fIFD
 Read the index array from file descriptor FD instead of the default 3.
@@ -208,6 +210,9 @@ This is like -y but also synchronizes all file metadata immediately.
 Do not automatically seek to the end of the output file.
 .br
 This is equivalent to passing '-' to -w and the default when not using -o.
+.TP
+.B \-Z \fIOFFSET
+Add OFFSET to all values read from the index. This may be positive or negative.
 .SH EXAMPLES
 Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
 .IP
@@ -253,15 +258,19 @@ bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 .PP
 or equivalently:
 .IP
-bytecopy -r big.file.idx -i big.file -to segment.file ^2
+bytecopy -x big.file.idx -i big.file -to segment.file ^2
 .PP
 Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to indicate progress:
 .IP
 bytecopy -i disk.img -yzo /dev/sdX +i
 .PP
-Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the destination size as limit so progress indicates space used, while allowing the image to be smaller (-E):
+Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 MiB with the destination size as limit so progress indicates space used, while allowing the image to be smaller (-E):
 .IP
 zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
+.PP
+Monitor progress while extracting an archive with an 8 MiB buffer:
+.IP
+bytecopy -pb8M -i archive.tar.gz +i | tar x
 .SH AUTHOR
 Written by Johannes Schmitz
 .SH SOURCE

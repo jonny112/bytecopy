@@ -31,6 +31,7 @@ struct ioStatus {
     uint64_t wr;
     off64_t lenIn;
     off64_t lenOut;
+    int64_t offsetIn;
     int fdIn;
     int fdOut;
     int fdIdx;
@@ -92,6 +93,7 @@ char readIdx(struct ioStatus *io, off64_t *offset, int64_t idx, int64_t *val) {
     } else if (io->endian == 'U') {
         *val = be64toh(*val);
     }
+    *val += io->offsetIn;
     return 0;
 }
 
@@ -186,8 +188,8 @@ void printUsage() {
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
-        "    -a SIZE     align read/write offsets to buffer block boundary (r: input, w: output)\n"
-        "    -b SIZE     set I/O buffer size (default: 512K)\n"
+        "    -a OFFSET   adjust buffer size for initial cycle by OFFSET (number or r: input, w: output)\n"
+        "    -b SIZE     buffer up to SIZE bytes per read/write cycle (default: 512K)\n"
         "    -B          force buffering, do not write after partial read\n"
         "    -e          write final buffer even if empty\n"
         "    -E          do not consider premature end of input an error\n"
@@ -198,9 +200,9 @@ void printUsage() {
         "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
         "    -O FD       write to the specified file descriptor (default: standard output)\n"
         "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
+        "    -P POS      use POS as offset for reading index values\n"
         "    -q          don't print progress, only status messages to standard error\n"
         "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
-        "    -r FILE     open FILE for reading index values (overrides -X)\n"
         "    -s          skip input (read and discard) up to START instead of seeking\n"
         "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
         "    -t          truncate (overwrite) output file (only works with -o)\n"
@@ -208,13 +210,14 @@ void printUsage() {
         "    -u          assume little-endian byte order for index values\n"
         "    -U          assume big-endian byte order for index values\n"
         "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
-        "    -x OFFSET   use OFFSET for reading index values\n"
+        "    -x FILE     open FILE for reading index values (overrides -X)\n"
         "    -X FD       read index values from the specified file descriptor (default: 3)\n"
         "    -y          use data synchronized write mode (only works with -o)\n"
         "    -Y          use fully synchronized write mode (only works with -o)\n"
         "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
+        "    -Z OFFSET   add OFFSET (may be nagative) to index values\n"
         "\n"
-        "START, END, POS and OFFSET are zero-based byte offsets from the start of a file.\n"
+        "START, END and POS are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
         "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
         
@@ -240,14 +243,14 @@ int main(int argc, char **argv) {
     bool bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL;
-    struct ioStatus io = {0, 0, 0, 0, -1, -1, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
+    struct ioStatus io = {0, 0, 0, 0, -1, -1, 0, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
     
     // parse options
     static const struct option long_opts[] = {
         { "help", 0, 0, 'h' },
         { 0, 0, 0, 0 }
     };
-    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pqQr:sStT:uUw:x:X:yYz", long_opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pP:qQsStT:uUw:x:X:yYzZ:", long_opts, NULL)) != -1) {
         if (opt == 'h') {
             printUsage();
             return 1;
@@ -300,6 +303,9 @@ int main(int argc, char **argv) {
             // progress only
             bStatus = false;
             io.prog = 2;            
+        } else if (opt == 'P') {
+            // index offset
+            if (parseNum(optarg, &offIdx)) opt = '!';
         } else if (opt == 'q' && io.prog < 1) {
             // no progress
             io.prog = -1;
@@ -307,9 +313,6 @@ int main(int argc, char **argv) {
             // errors only
             io.prog = -1;
             bStatus = false;
-        } else if (opt == 'r') {
-            // resource file
-            pathRes = optarg;
         } else if (opt == 's') {
             // don't seek in input
             bSeekStart = false;
@@ -329,7 +332,8 @@ int main(int argc, char **argv) {
             // seek in output
             strOutSeek = optarg;
         } else if (opt == 'x') {
-            if (parseNum(optarg, &offIdx)) opt = '!';
+            // index file
+            pathRes = optarg;
         } else if (opt == 'X') {
             // output fd
             io.fdIdx = atoi(optarg);
@@ -342,6 +346,9 @@ int main(int argc, char **argv) {
         } else if (opt == 'z') {
             // don't seek in output
             strOutSeek = "-";
+        } else if (opt == 'Z') {
+            // index values offset
+            if (parseNum(optarg, &io.offsetIn)) opt = '!';
         }
         
         if (opt == '!') {
@@ -366,9 +373,9 @@ int main(int argc, char **argv) {
     }
     
     if (pathRes != NULL) {
-        // open resource file for index
+        // open index file
         if ((io.fdIdx = open(pathRes, O_RDONLY)) == -1) {
-            msg("failed to open resource file: %s: %s\n", pathRes, strerror(errno));
+            msg("failed to open index file: %s: %s\n", pathRes, strerror(errno));
             return 1;
         }
         if (bStatus) msg("index: %s\n", pathRes);
@@ -500,7 +507,7 @@ int main(int argc, char **argv) {
         if (offStart > 0) {
             if (offStart > pos) msg("+(skipping)..");
             msg("+%" PRId64, offStart);
-        } else msg("+(current)");
+        } else msg("+(initial)");
         msg("+..");
     }
     if (offEnd >= 0) {

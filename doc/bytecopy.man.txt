@@ -51,25 +51,26 @@ DESCRIPTION
    Index
        Instead of specifying the values for START or END directly, they may be read from an index file. The index file is an
        array of 64-bit (8-byte) integers representing byte offsets. It is read from file descriptor 3, by default.
-       See options -r, -x and -X. By default, values are read from the index file as-is, that is, assumed to be in the host
-       machine's native byte order. See -u and -U.
+       See options -P, -x, -X and -Z.
+       Values from the index file are read as-is, by default, that is, assumed to be in the host machine's native byte order.
+       See -u and -U.
 
        To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for START
        or END.  A '*' that is not followed by any number will read the next value from whatever the current position of the
        index file is. This allows to read offset values from non-seekable resources.
 
        As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a
-       '^' (caret) may be passed for START, overriding END.
+       '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
        Range positions are derived as follows (example for an index with three entries):
 
               <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
 
 OPTIONS
        -a SIZE
-              Align reading or writing to the buffer block boundary. That is, if the offset from the beginning of the file is
-              not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so that this
-              becomes the case for subsequent cycles. This does not change the amount or position of the data being copied but
-              may add an additional read/write cycle for the adjustment.
+              Align reading or writing to the boundary of the buffered block. That is, if the starting offset for the copy
+              operation is not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so
+              that this becomes the case for subsequent cycles. This does not change the amount or position of the data being
+              copied but may add an additional read/write cycle for the adjustment.
               SIZE may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
               after the initial seek operation, see -o, and -w).
               If SIZE is a positive number it specifies the immediate length of the initial copy cycle. A negative number
@@ -116,13 +117,13 @@ OPTIONS
        -p     Report progress on standard error, but no other status messages except errors.
               This overrides both -q and -Q. See also -n.
 
+       -P POS Position of the index array in the index file. Where POS is a zero-based byte position counted form the beginning
+              of the file pointing to the first index entry. Defaults to 0.
+
        -q     Be quiet. Do not report progress.
               By default, statistics are printed to standard error after each read/write cycle.
 
        -Q     Be more quiet. Do not print any progress or status messages, only errors, to standard error.
-
-       -r FILE
-              Open FILE for reading and use it as resource for the index array. This overrides -X.
 
        -s     Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach START
               instead of directly seeking to that position.
@@ -163,9 +164,8 @@ OPTIONS
               until something is actually written to the gap.
               Passing a '-' (dash) for POS prevents seeking to the end when using -o, see -z.
 
-       -x OFFSET
-              Use an offset for reading from the index array. Where OFFSET is a zero-based byte position counted form the
-              beginning of the index file pointing to the first index entry.
+       -x FILE
+              Open FILE for reading the index array. This overrides -X.
 
        -X FD  Read the index array from file descriptor FD instead of the default 3.
 
@@ -178,6 +178,9 @@ OPTIONS
 
        -z     Do not automatically seek to the end of the output file.
               This is equivalent to passing '-' to -w and the default when not using -o.
+
+       -Z OFFSET
+              Add OFFSET to all values read from the index. This may be positive or negative.
 
 EXAMPLES
        Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
@@ -223,17 +226,21 @@ EXAMPLES
 
        or equivalently:
 
-              bytecopy -r big.file.idx -i big.file -to segment.file ^2
+              bytecopy -x big.file.idx -i big.file -to segment.file ^2
 
        Copy a disk image to a device (-z to start at the beginning), synchronized (-y), with the input file size as limit to
        indicate progress:
 
               bytecopy -i disk.img -yzo /dev/sdX +i
 
-       Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 megabytes with the
-       destination size as limit so progress indicates space used, while allowing the image to be smaller (-E):
+       Copy a disk image from a compressed file directly to a device, synchronized, in blocks of 4 MiB with the destination
+       size as limit so progress indicates space used, while allowing the image to be smaller (-E):
 
               zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
+
+       Monitor progress while extracting an archive with an 8 MiB buffer:
+
+              bytecopy -pb8M -i archive.tar.gz +i | tar x
 
 AUTHOR
        Written by Johannes Schmitz
@@ -241,4 +248,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                        May 2025                                                BYTECOPY(1)
+UNIX                                                       July 2025                                                BYTECOPY(1)
