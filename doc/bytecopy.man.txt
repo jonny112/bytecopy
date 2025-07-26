@@ -66,16 +66,16 @@ DESCRIPTION
               <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
 
 OPTIONS
-       -a SIZE
-              Align reading or writing to the boundary of the buffered block. That is, if the starting offset for the copy
-              operation is not an even multiple of the buffer size (see -b), adjust the length of the first read/write cycle so
-              that this becomes the case for subsequent cycles. This does not change the amount or position of the data being
-              copied but may add an additional read/write cycle for the adjustment.
-              SIZE may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
-              after the initial seek operation, see -o, and -w).
-              If SIZE is a positive number it specifies the immediate length of the initial copy cycle. A negative number
-              reduces the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this
-              boundary in case SIZE should be larger.
+       -a OFFSET
+              Adjust the length of the first read/write cycle by OFFSET. If the starting offset for the copy operation is not
+              an even multiple of the buffer size (see -b) this can be used to align subsequent cycles with a certain block
+              boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle
+              may be added for the adjustment.
+              If OFFSET is a positive number it specifies the immediate length of the initial cycle. A negative number reduces
+              the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this boundary
+              in case OFFSET should be larger.
+              OFFSET may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
+              after the initial seek operation, see -o, and -w), each inverted.
               In certain cases -B will have to be used for this option to be effective.
               This option has no effect in case it references an offset that is not specified or 0.
 
@@ -84,7 +84,7 @@ OPTIONS
               The default is 512K = 524288 bytes.  If the total number of bytes to copy is known and smaller than SIZE, the
               buffer will be automatically decreased to the required length.
 
-       -B     Always fill the entire buffer before writing, unless END or the end of input has been reached.
+       -B     Always fill the entire buffer before writing, unless END or the end of input have been reached.
               Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output
               immediately.  Partial reads may occur when reading from network resources or terminals but usually are of no
               concern for regular files and local storage devices.
