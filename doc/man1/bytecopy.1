@@ -126,7 +126,7 @@ When writing directly to a storage device, you will have to specify one of -t, -
 Write output to file descriptor FD instead of the standard output.
 .TP
 .B \-p
-Report progress on standard error, but no other status messages except errors.
+Report only progress on standard error but no other status messages except errors.
 .br
 This overrides both -q and -Q. See also -n.
 .TP
@@ -252,7 +252,7 @@ echo "Earth" | bytecopy -o some.file -w6 +5
 .PP
 Extract the segment between the second and the third index entry:
 .br
-Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte offsets 8 and 16 in the index file, respectively.
+Unless -P is specified with an argument other than zero, the actual values for START and END are read from byte offsets 8 and 16 in the index file, respectively.
 .IP
 bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
 .PP
@@ -270,7 +270,7 @@ zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
 .PP
 Monitor progress while extracting an archive with an 8 MiB buffer:
 .IP
-bytecopy -pb8M -i archive.tar.gz +i | tar x
+bytecopy -pb8M -i archive.tar +i | tar x
 .SH AUTHOR
 Written by Johannes Schmitz
 .SH SOURCE

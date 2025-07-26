@@ -114,7 +114,7 @@ OPTIONS
 
        -O FD  Write output to file descriptor FD instead of the standard output.
 
-       -p     Report progress on standard error, but no other status messages except errors.
+       -p     Report only progress on standard error but no other status messages except errors.
               This overrides both -q and -Q. See also -n.
 
        -P POS Position of the index array in the index file. Where POS is a zero-based byte position counted form the beginning
@@ -219,7 +219,7 @@ EXAMPLES
               echo "Earth" | bytecopy -o some.file -w6 +5
 
        Extract the segment between the second and the third index entry:
-       Unless -x is specified with an argument other than zero, the actual values for START and END are read from byte offsets
+       Unless -P is specified with an argument other than zero, the actual values for START and END are read from byte offsets
        8 and 16 in the index file, respectively.
 
               bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
@@ -240,7 +240,7 @@ EXAMPLES
 
        Monitor progress while extracting an archive with an 8 MiB buffer:
 
-              bytecopy -pb8M -i archive.tar.gz +i | tar x
+              bytecopy -pb8M -i archive.tar +i | tar x
 
 AUTHOR
        Written by Johannes Schmitz
