@@ -20,6 +20,7 @@
 #include <endian.h>
 #include <errno.h>
 #include <getopt.h>
+#include <locale.h>
 
 #define BUFFER_DEFAULT 1024 * 512
 #define FD_IDX_DEFAULT 3
@@ -31,6 +32,7 @@ struct ioStatus {
     uint64_t wr;
     off64_t lenIn;
     off64_t lenOut;
+    off64_t total;
     int64_t offsetIn;
     int fdIn;
     int fdOut;
@@ -149,7 +151,6 @@ char parseOffset(char *opt, off64_t *pos, struct ioStatus *io) {
             }
             if (parseNum(&opt[2], &offset)) return 1;
         }
-        
         len = in ? &io->lenIn : &io->lenOut;
         if (*len == -1) if (seekEnd(in ? io->fdIn : io->fdOut, len, in ? "input" : "output")) return 1;
         if (add) *pos = *len + offset; else *pos = *len - offset;
@@ -170,21 +171,30 @@ void printFD(int fd) {
     msg("+)\n");
 }
 
-void printStats(struct ioStatus *io, off64_t total, char lineEnd) {
-    msg("reads/writes: %" PRIu64 "/%" PRIu64 ", in/out: %" PRIu64 "/%" PRIu64 " bytes", io->rd, io->wr, io->in, io->out);
-    if (total != -1) {
-        if (io->prog > 1) fprintf(stderr, " of %" PRId64, total);
-        fprintf(stderr, " (%.1f%%)", total == 0 ? 100.0 : (int)((float)io->in / total * 1000) / 10.0);
+void printStats(struct ioStatus *io, char lineEnd) {
+    msg("reads/writes: %" PRIu64 "/%" PRIu64 ", bytes: %'" PRIu64 " in, %'" PRIu64 " out", io->rd, io->wr, io->in, io->out);
+    if (io->total != -1) {
+        if (io->prog > 1) fprintf(stderr, ", %'" PRId64 " total", io->total);
+        fprintf(stderr, " (%.1f%%)", io->total == 0 ? 100.0 : (int)((float)io->in / io->total * 1000) / 10.0);
     }
     fprintf(stderr, "%c", lineEnd);
     if (io->prog < 1) io->prog = 1;
+}
+
+bool strIsChar(char *s, char c) {
+    return s[0] == c && s[1] == '\0';
+}
+
+int errArg(int n) {
+    msg("illegal argument #%d\n", n);
+    return EXIT_FAILURE;
 }
 
 void printUsage() {
     fprintf(stderr,
         "Usage: bytecopy [OPTION]... START [END]\n"
         "       bytecopy [OPTION]... START [+LENGTH]\n"
-        "       bytecopy [OPTION]... [+LENGTH]\n"
+        "       bytecopy [OPTION]... [+LENGTH [SLICE]]\n"
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
@@ -215,11 +225,12 @@ void printUsage() {
         "    -y          use data synchronized write mode (only works with -o)\n"
         "    -Y          use fully synchronized write mode (only works with -o)\n"
         "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
-        "    -Z OFFSET   add OFFSET (may be nagative) to index values\n"
+        "    -Z OFFSET   add OFFSET (may be nagative) to index values or slice positions\n"
         "\n"
         "START, END and POS are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
         "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
+        "SLICE calculates START as multiple of LENGTH. This copies the n-th slice of LENGTH size.\n"
         
         "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
         "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
@@ -229,22 +240,26 @@ void printUsage() {
         "The suffixes K, M, G may be used to multiply a value by 1024, 1024^2 or 1024^3 respectively.\n"
         "\n"
         "Values for START and END may be read from an index, an array of 64-bit integers\n"
-        "which are addressed using their zero-based position prefixed with '*'.\n"
+        "which are addressed using their zero-based position prefixed with ':' or '*'.\n"
         "As a shorthand, the range between two adjacent index values may be specified\n"
         "by passing the zero-based position of the range prefixed with '^' as START,\n"
         "where the first range is from the beginning of the input to the first index value\n"
         "and the last range is from the last index value to the end of input.\n"
+        "\n"
+        "See man page bytecopy(1) for more details.\n"
     );
 }
 
 int main(int argc, char **argv) {
     int64_t num;
-    off64_t pos = 0, total = -1, offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
-    bool bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
+    off64_t pos = 0, offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
+    bool bStart = false, bLen = false, bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL;
-    struct ioStatus io = {0, 0, 0, 0, -1, -1, 0, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
-    
+    struct ioStatus io = {0, 0, 0, 0, -1, -1, -1, 0, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
+
+    setlocale(LC_ALL, "");
+
     // parse options
     static const struct option long_opts[] = {
         { "help", 0, 0, 'h' },
@@ -252,8 +267,12 @@ int main(int argc, char **argv) {
     };
     while ((opt = getopt_long(argc, argv, ":a:b:BeEhi:I:no:O:pP:qQsStT:uUw:x:X:yYzZ:", long_opts, NULL)) != -1) {
         if (opt == 'h') {
+            if (argc > 2) {
+                msg("-h/--help cannot be combined with other options\n");
+                return EXIT_FAILURE;
+            }
             printUsage();
-            return 1;
+            return EXIT_SUCCESS;
         } else if (opt == 'a') {
             // align buffer
             strAlign = optarg;
@@ -273,7 +292,7 @@ int main(int argc, char **argv) {
             }
             if (bufferLen < 1) {
                 msg("buffer size must be >0\n");
-                return 1;
+                opt = '!';
             }
         } else if (opt == 'B') {
             // force buffering
@@ -302,7 +321,7 @@ int main(int argc, char **argv) {
         } else if (opt == 'p') {
             // progress only
             bStatus = false;
-            io.prog = 2;            
+            io.prog = 2;
         } else if (opt == 'P') {
             // index offset
             if (parseNum(optarg, &offIdx)) opt = '!';
@@ -325,12 +344,16 @@ int main(int argc, char **argv) {
         } else if (opt == 'T') {
             // truncate output to length
             strOutTruncate = optarg;
+            if (parseOffset(strOutTruncate, &num, &io)) opt = '!';
         } else if (opt == 'u' || opt == 'U') {
             // specific endianness;
             io.endian = opt;
         } else if (opt == 'w') {
             // seek in output
             strOutSeek = optarg;
+            if (!strIsChar(strOutSeek, '-')) {
+                if (parseOffset(strOutSeek, &offWrite, &io)) opt = '!';
+            }
         } else if (opt == 'x') {
             // index file
             pathRes = optarg;
@@ -350,41 +373,42 @@ int main(int argc, char **argv) {
             // index values offset
             if (parseNum(optarg, &io.offsetIn)) opt = '!';
         }
-        
+
         if (opt == '!') {
-            msg("error at argument %d\n", optind - 1);
-            return 1;
+            return errArg(optind - 1);
         } else if (opt == ':') {
-            msg("missing argument to option '%c'\n", optopt);
-            return 1;
+            msg("missing argument to option -%c\n", optopt);
+            return EXIT_FAILURE;
         } else if (opt == '?') {
-            msg("unknown option %s, try -h for help\n", argv[optind - 1]);
-            return 1;
+            if (optopt) {
+                msg("unknown option -%c, try -h for help\n", optopt);
+            } else {
+                msg("bad option %s, try -h for help\n", argv[optind - 1]);
+            }
+            return EXIT_FAILURE;
         }
     }
-    
+
     if (pathOut == NULL) {
         if (flagsOut) {
             msg("Options -t, -y and -Y can only be used in combination with -o.\n");
-            return 1;
+            return EXIT_FAILURE;
         }
-    } else {
-        flagsOut |= O_WRONLY | O_CREAT;
-    }
-    
+    } else flagsOut |= O_WRONLY | O_CREAT;
+
     if (pathRes != NULL) {
         // open index file
         if ((io.fdIdx = open(pathRes, O_RDONLY)) == -1) {
             msg("failed to open index file: %s: %s\n", pathRes, strerror(errno));
-            return 1;
+            return EXIT_FAILURE;
         }
         if (bStatus) msg("index: %s\n", pathRes);
     }
-    
+
     // open input
     if (pathIn != NULL && (io.fdIn = open(pathIn, O_RDONLY)) == -1) {
         msg("failed to open input file: %s: %s\n", pathIn, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
     if (bStatus) {
         msg("reading: ");
@@ -394,11 +418,11 @@ int main(int argc, char **argv) {
             msg("+%s\n", pathIn);
         }
     }
-    
+
     // open output
     if (pathOut != NULL && (io.fdOut = open(pathOut, flagsOut, 0666)) == -1) {
         msg("failed to open output file: %s: %s\n", pathOut, strerror(errno));
-        return 1;
+        return EXIT_FAILURE;
     }
     if (bStatus) {
         msg("writing: ");
@@ -408,91 +432,101 @@ int main(int argc, char **argv) {
             msg("+%s\n", pathOut);
         }
     }
-    
+
     // parse range
     if (argc > optind) {
         if (argv[optind][0] == '^') {
             // range from index
-            if (parseNum(&argv[optind][1], &num)) return 1;
+            if (parseNum(&argv[optind][1], &num)) return errArg(optind);
             // start
-            if (num > 0) if (readIdx(&io, &offIdx, num - 1, &offStart)) return 1;
+            if (num > 0) if (readIdx(&io, &offIdx, num - 1, &offStart)) return errArg(optind);
             // end
-            if (readIdx(&io, &offIdx, num, &offEnd)) return 1;
+            if (readIdx(&io, &offIdx, num, &offEnd)) return errArg(optind);
         } else {
             num = 0;
-            
+
             // start
-            if (argv[optind][0] != '-' && argv[optind][0] != '+') {
-                if (argv[optind][0] == '*') {
-                    // from index
-                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return 1;
-                    if (argv[optind][1] == '\0') num = 1;
-                } else {
-                    // direct or relative to end
-                    if (parseOffset(argv[optind], &offStart, &io)) return 1;
-                }
+            if (argv[optind][0] == '+') {
+                optind--;
             } else {
-                bSeekStart = false;
-                if (argv[optind][0] == '+') optind--;
+                bStart = true;
+                if (!strIsChar(argv[optind], '-')) {
+                    if (argv[optind][0] == '*' || argv[optind][0] == ':') {
+                        // from index
+                        if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return errArg(optind);
+                        if (argv[optind][1] == '\0') num = 1;
+                    } else {
+                        // direct or relative to end
+                        if (parseOffset(argv[optind], &offStart, &io)) return errArg(optind);
+                    }
+                } else bSeekStart = false;
             }
-            
+
             // end
-            if (argc > ++optind && argv[optind][0] != '-') {
-                if (argv[optind][0] == '*') {
-                    // from index
-                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return 1;
-                } else if (argv[optind][0] == '+') {
+            if (argc > ++optind && !strIsChar(argv[optind], '-')) {
+                if (argv[optind][0] == '+') {
                     // offset
-                    if (parseOffset(&argv[optind][1], &offEnd, &io)) return 1;
+                    if (parseOffset(&argv[optind][1], &offEnd, &io)) return errArg(optind);
                     offEnd += offStart;
+                    bLen = !bStart;
                 } else {
-                    // direct or relative to end
-                    if (parseOffset(argv[optind], &offEnd, &io)) return 1;
+                    if (argv[optind][0] == '*' || argv[optind][0] == ':') {
+                        // from index
+                        if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return errArg(optind);
+                    } else {
+                        // direct or relative to end
+                        if (parseOffset(argv[optind], &offEnd, &io)) return errArg(optind);
+                    }
                 }
             }
+
+            // slice
+            if (bLen && argc > ++optind) {
+                if (parseNum(argv[optind], &num)) return errArg(optind);
+                offStart = num * offEnd + io.offsetIn;
+                offEnd += offStart;
+            } else bSeekStart &= bStart;
         }
     } else bSeekStart = false;
-    
+
     if (pathRes != NULL) close(io.fdIdx);
-    
+
     if (argc > (optind + 1)) {
         msg("superfluous argument #%d: %s\n", optind + 1, argv[optind + 1]);
-        return 1;
+        return EXIT_FAILURE;
     }
-    
+
     // check range
     if (offEnd >= 0 && offEnd < offStart) {
         msg("invalid range (%" PRId64 "<%" PRId64 ")\n", offEnd, offStart);
-        return 1;
+        return EXIT_FAILURE;
     }
-    
+
     // seek input
     if (bSeekStart) {
         if (seek(io.fdIn, &offStart, "input")) return 1;
         pos = offStart;
     }
-    
+
     // truncate output
     if (strOutTruncate != NULL) {
-        if (parseOffset(strOutTruncate, &num, &io)) return 1;
         if (ftruncate64(io.fdOut, num) == -1) {
-            msg("failed to truncate output to %" PRId64 " bytes: %s\n", num, strerror(errno));
-            return 1;
+            msg("failed to truncate output to %'" PRId64 " bytes: %s\n", num, strerror(errno));
+            return EXIT_FAILURE;
         }
-        if (bStatus) msg("output file truncated to %" PRId64 " bytes\n", num);
+        if (bStatus) msg("output file truncated to %'" PRId64 " bytes\n", num);
         io.lenOut = num;
     }
-    
+
     // seek output
     if (strOutSeek != NULL) {
-        if (strOutSeek[0] != '-') {
-            if (parseOffset(strOutSeek, &offWrite, &io)) return 1;
-            if (seek(io.fdOut, &offWrite, "output")) return 1;
+        if (!strIsChar(strOutSeek, '-')) {
+            if (seek(io.fdOut, &offWrite, "output")) return EXIT_FAILURE;
         }
     } else if (pathOut != NULL && !(flagsOut & O_TRUNC)) {
         offWrite = lseek64(io.fdOut, 0, SEEK_END);
     }
-    
+
     // buffer allignment
     if (strAlign != NULL) {
         if (strAlign[0] == 'r') blockSize = -offStart;
@@ -500,26 +534,23 @@ int main(int argc, char **argv) {
         blockSize = ((blockSize % bufferLen) + bufferLen) % bufferLen;
     }
     if (blockSize == 0) blockSize = bufferLen;
-    
+
     // allocate buffer
     if (bStatus) {
         msg("range: ");
-        if (offStart > 0) {
+        if (bSeekStart || offStart > 0) {
             if (offStart > pos) msg("+(skipping)..");
             msg("+%" PRId64, offStart);
         } else msg("+(initial)");
         msg("+..");
     }
     if (offEnd >= 0) {
-        total = offEnd - pos;
-        if (total < bufferLen) { 
-            bufferLen = (total < 1 ? 1 : total);
+        io.total = offEnd - pos;
+        if (io.total < bufferLen) {
+            bufferLen = (io.total < 1 ? 1 : io.total);
             if (blockSize > bufferLen) blockSize = bufferLen;
         }
-        if (bStatus) {
-            msg("+%" PRId64, offEnd);
-            if (offStart > 0) msg("+ (%" PRId64 " bytes)", offEnd - offStart);
-        }
+        if (bStatus) msg("+%" PRId64 " (%'" PRId64 " bytes)", offEnd, offEnd - offStart);
     } else if (bStatus) msg("+(unbounded)");
     if (bStatus) {
         msg("+ -> ");
@@ -528,15 +559,15 @@ int main(int argc, char **argv) {
         if (offWrite >= 0 && offEnd >= 0) msg("+%" PRId64, offWrite + (offEnd - offStart));
         msg("+ at ");
         if (blockSize != bufferLen) msg("+%d + ", blockSize);
-        msg("+%d bytes", bufferLen);
-        if (total != -1) msg("+ * %" PRId64, ((total - (blockSize < bufferLen ? blockSize : 0)) + bufferLen - 1) / bufferLen);
+        msg("+%'d bytes", bufferLen);
+        if (io.total != -1) msg("+ * %" PRId64, ((io.total - (blockSize < bufferLen ? blockSize : 0)) + bufferLen - 1) / bufferLen);
         msg("+\n");
     }
     io.buffer = malloc(bufferLen);
-    
+
     // copy
     bufferPos = 0;
-    if (io.prog > 1) printStats(&io, total, bProgLF ? '\n' : ' ');
+    if (io.prog > 1) printStats(&io, bProgLF ? '\n' : ' ');
     do {
         rq = (offEnd >= 0 && (pos + bufferLen) > offEnd ? offEnd - pos : blockSize) - bufferPos;
         rd = read(io.fdIn, io.buffer + bufferPos, rq);
@@ -564,33 +595,33 @@ int main(int argc, char **argv) {
         // progress
         if (io.prog >= 0) {
             if (!bProgLF) fprintf(stderr, "\r");
-            printStats(&io, total, bProgLF ? '\n' : ' ');
+            printStats(&io, bProgLF ? '\n' : ' ');
         }
     } while (rd && (offEnd < 0 || pos < offEnd));
-    
+
     // final stats
     if (io.prog > 0 && !bProgLF) fprintf(stderr, "\n");
-    if (bStatus && io.prog < 0) printStats(&io, -1, '\n');
-    
+    if (bStatus && io.prog < 0) printStats(&io, '\n');
+
     // error handling
     if (rd < 0) {
         msgerr("error reading input");
-        return 1;
+        return EXIT_FAILURE;
     } else if (wr < 0) {
         msgerr("error writing output");
-        return 1;
+        return EXIT_FAILURE;
     } else if (wr != rq) {
         msg("no more space to write output (%d<%d)\n", wr, rq);
-        return 1;
+        return EXIT_FAILURE;
     }
-    
+
     if (pathIn != NULL) close(io.fdIn);
     if (pathOut != NULL) close(io.fdOut);
     
     if (offEnd >= 0 && !bIgnEnd && io.out != (offEnd - offStart)) {
-        msg("premature end of input (%" PRIu64 "<%" PRId64 ")\n", io.out, offEnd - offStart);
-        return 1;
+        msg("premature end of input (%'" PRIu64 " < %'" PRId64 " bytes)\n", io.out, offEnd - offStart);
+        return EXIT_FAILURE;
     }
-    
-    return 0;
+
+    return EXIT_SUCCESS;
 }

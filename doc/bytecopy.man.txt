@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
        bytecopy [OPTION]... START [END]
        bytecopy [OPTION]... START [+LENGTH]
-       bytecopy [OPTION]... [+LENGTH]
+       bytecopy [OPTION]... [+LENGTH [SLICE]]
 
 DESCRIPTION
        Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
@@ -20,11 +20,12 @@ DESCRIPTION
        the input file.  To include the last byte this number has to be equal to the total number of bytes in the file.
        If not specified, the copy process is unbounded and will continue until the end of input. That is, until a read
        operation returns no data.
-       Subtracting END form START yields the total number of bytes to copy. END may be equal to START (in which case nothing is
-       copied) but must not be smaller.
+       Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing is
+       copied, but must not be smaller.
 
        LENGTH is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the
        corresponding value for END is obtained by adding LENGTH to START.
+       SLICE calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied.
 
        When START is omitted, END is equivalent to LENGTH.
        Passing a '-' (dash) in place of START or END is equivalent to omitting them.
@@ -201,13 +202,17 @@ EXAMPLES
 
        where -t causes the output file (-o) to be overwritten if it already exists.
 
-       Repeating the following command will append one more kilobyte of random data to the output file each time:
+       Repeating the following command will append one more KiB of random data to the output file each time:
 
-              bytecopy -o output.file +1K < /dev/urandom
+              bytecopy -o some.file +1K < /dev/urandom
 
        equivalently:
 
-              bytecopy -i /dev/urandom +1K >> output.file
+              bytecopy -i /dev/urandom +1K >> some.file
+
+       Extract the 5th KiB of the file
+
+              bytecopy -i some.file +1K 4 > some.file.part5
 
        Update contents of a file:
 
@@ -242,10 +247,14 @@ EXAMPLES
 
               bytecopy -pb8M -i archive.tar +i | tar x
 
+ENVIRONMENT
+       This program honors the locale settings defined by the LC environment variables for formatting numbers and translations
+       of system error messages.
+
 AUTHOR
        Written by Johannes Schmitz
 
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                       July 2025                                                BYTECOPY(1)
+UNIX                                                      August 2025                                               BYTECOPY(1)

@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "July 2025" UNIX "User Commands"
+.TH BYTECOPY 1 "August 2025" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -9,7 +9,7 @@ bytecopy \- copy bytes between files
 [\fIOPTION\fR]... \fISTART\fR [+\fILENGTH\fR]
 .br
 .B bytecopy
-[\fIOPTION\fR]... [+\fILENGTH\fR]
+[\fIOPTION\fR]... [+\fILENGTH\fR [\fISLICE\fR]]
 .SH DESCRIPTION
 Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
 .br
@@ -26,9 +26,11 @@ To include the last byte this number has to be equal to the total number of byte
 .br
 If not specified, the copy process is unbounded and will continue until the end of input. That is, until a read operation returns no data.
 .br
-Subtracting END form START yields the total number of bytes to copy. END may be equal to START (in which case nothing is copied) but must not be smaller.
+Subtracting END form START yields the total number of bytes to copy. END may be equal to START, in which case nothing is copied, but must not be smaller.
 .PP
 \fILENGTH\fR is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the corresponding value for END is obtained by adding LENGTH to START.
+.br
+\fISLICE\fR calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied.
 .PP
 When START is omitted, END is equivalent to LENGTH.
 .br
@@ -232,13 +234,17 @@ bytecopy -i source.file -to new.file 1000 +300
 .PP
 where -t causes the output file (-o) to be overwritten if it already exists.
 .PP
-Repeating the following command will append one more kilobyte of random data to the output file each time:
+Repeating the following command will append one more KiB of random data to the output file each time:
 .IP
-bytecopy -o output.file +1K < /dev/urandom
+bytecopy -o some.file +1K < /dev/urandom
 .PP
 equivalently:
 .IP
-bytecopy -i /dev/urandom +1K >> output.file
+bytecopy -i /dev/urandom +1K >> some.file
+.PP
+Extract the 5th KiB of the file
+.IP
+bytecopy -i some.file +1K 4 > some.file.part5
 .PP
 Update contents of a file:
 .IP
@@ -271,6 +277,8 @@ zcat disk.img.gz | bytecopy -Eyzo /dev/sdX -b4M +o
 Monitor progress while extracting an archive with an 8 MiB buffer:
 .IP
 bytecopy -pb8M -i archive.tar +i | tar x
+.SH ENVIRONMENT
+This program honors the locale settings defined by the LC environment variables for formatting numbers and translations of system error messages.
 .SH AUTHOR
 Written by Johannes Schmitz
 .SH SOURCE
