@@ -42,6 +42,11 @@ struct ioStatus {
     void *buffer;
 };
 
+struct optRef {
+    int idx;
+    char *str;
+};
+
 void msg(char *fmt, ...) {
     va_list args;
     if (fmt[0] != '+') fprintf(stderr, "bytecopy: ");
@@ -225,7 +230,7 @@ void printUsage() {
         "    -y          use data synchronized write mode (only works with -o)\n"
         "    -Y          use fully synchronized write mode (only works with -o)\n"
         "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
-        "    -Z OFFSET   add OFFSET (may be nagative) to index values or slice positions\n"
+        "    -Z OFFSET   add OFFSET (may be nagative) to index values and SLICE positions\n"
         "\n"
         "START, END and POS are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
@@ -255,8 +260,9 @@ int main(int argc, char **argv) {
     off64_t pos = 0, offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
     bool bStart = false, bLen = false, bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
-    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL, *strOutSeek = NULL, *strOutTruncate = NULL;
+    char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL;
     struct ioStatus io = {0, 0, 0, 0, -1, -1, -1, 0, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
+    struct optRef optOutSeek = {0, NULL}, optOutTruncate = {0, NULL};
 
     setlocale(LC_ALL, "");
 
@@ -343,16 +349,19 @@ int main(int argc, char **argv) {
             flagsOut |= O_TRUNC;
         } else if (opt == 'T') {
             // truncate output to length
-            strOutTruncate = optarg;
-            if (parseOffset(strOutTruncate, &num, &io)) opt = '!';
+            optOutTruncate.idx = optind - 1;
+            optOutTruncate.str = optarg;
         } else if (opt == 'u' || opt == 'U') {
             // specific endianness;
             io.endian = opt;
         } else if (opt == 'w') {
             // seek in output
-            strOutSeek = optarg;
-            if (!strIsChar(strOutSeek, '-')) {
-                if (parseOffset(strOutSeek, &offWrite, &io)) opt = '!';
+            if (strIsChar(optarg, '-')) {
+                // explicitly don't
+                optOutSeek.idx = -1;
+            } else {
+                optOutSeek.idx = optind - 1;
+                optOutSeek.str = optarg;
             }
         } else if (opt == 'x') {
             // index file
@@ -368,7 +377,7 @@ int main(int argc, char **argv) {
             flagsOut |= O_SYNC;
         } else if (opt == 'z') {
             // don't seek in output
-            strOutSeek = "-";
+            optOutSeek.idx = -1;
         } else if (opt == 'Z') {
             // index values offset
             if (parseNum(optarg, &io.offsetIn)) opt = '!';
@@ -509,7 +518,8 @@ int main(int argc, char **argv) {
     }
 
     // truncate output
-    if (strOutTruncate != NULL) {
+    if (optOutTruncate.idx != 0) {
+        if (parseOffset(optOutTruncate.str, &num, &io)) return errArg(optOutTruncate.idx);
         if (ftruncate64(io.fdOut, num) == -1) {
             msg("failed to truncate output to %'" PRId64 " bytes: %s\n", num, strerror(errno));
             return EXIT_FAILURE;
@@ -519,8 +529,9 @@ int main(int argc, char **argv) {
     }
 
     // seek output
-    if (strOutSeek != NULL) {
-        if (!strIsChar(strOutSeek, '-')) {
+    if (optOutSeek.idx != 0) {
+        if (optOutSeek.idx > 0) {
+            if (parseOffset(optOutSeek.str, &offWrite, &io)) return errArg(optOutSeek.idx);
             if (seek(io.fdOut, &offWrite, "output")) return EXIT_FAILURE;
         }
     } else if (pathOut != NULL && !(flagsOut & O_TRUNC)) {

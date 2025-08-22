@@ -181,7 +181,7 @@ OPTIONS
               This is equivalent to passing '-' to -w and the default when not using -o.
 
        -Z OFFSET
-              Add OFFSET to all values read from the index. This may be positive or negative.
+              Add OFFSET to all values read from the index and positions determined by SLICE. This may be positive or negative.
 
 EXAMPLES
        Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
