@@ -235,7 +235,7 @@ void printUsage() {
         "START, END and POS are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
         "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
-        "SLICE calculates START as multiple of LENGTH. This copies the n-th slice of LENGTH size.\n"
+        "SLICE calculates START as multiple of LENGTH, thus copying the n-th slice of LENGTH size.\n"
         
         "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
         "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"

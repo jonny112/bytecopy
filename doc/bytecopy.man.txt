@@ -56,15 +56,15 @@ DESCRIPTION
        Values from the index file are read as-is, by default, that is, assumed to be in the host machine's native byte order.
        See -u and -U.
 
-       To use an offset value from the index, specify its zero-based array position prefixed with an '*' (asterisk) for START
-       or END.  A '*' that is not followed by any number will read the next value from whatever the current position of the
-       index file is. This allows to read offset values from non-seekable resources.
+       To use an offset value from the index, specify its zero-based array position prefixed with a ':' (colon) or an '*'
+       (asterisk) for START or END.  A ':' or '*' that is not followed by any number will read the next value from whatever the
+       current position of the index file is. This allows to read offset values from non-seekable resources.
 
        As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a
        '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
        Range positions are derived as follows (example for an index with three entries):
 
-              <start of input> ^0 <first offset = *0> ^1 <second offset = *1> ^2 <third offset = *2> ^3 <end of input>
+              <start of input> ^0 <first offset = :0> ^1 <second offset = :1> ^2 <third offset = :2> ^3 <end of input>
 
 OPTIONS
        -a OFFSET
@@ -76,7 +76,8 @@ OPTIONS
               the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this boundary
               in case OFFSET should be larger.
               OFFSET may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
-              after the initial seek operation, see -o, and -w), each inverted.
+              after the initial seek operation, see -o, and -w), each inverted, so the length of the initial cycle will be
+              reduced by the remainder of that offset divided by the buffer size.
               In certain cases -B will have to be used for this option to be effective.
               This option has no effect in case it references an offset that is not specified or 0.
 
@@ -227,7 +228,7 @@ EXAMPLES
        Unless -P is specified with an argument other than zero, the actual values for START and END are read from byte offsets
        8 and 16 in the index file, respectively.
 
-              bytecopy *1 *2 < big.file 3< big.file.idx > segment.file
+              bytecopy :1 :2 < big.file 3< big.file.idx > segment.file
 
        or equivalently:
 
@@ -257,4 +258,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                      August 2025                                               BYTECOPY(1)
+UNIX                                                     September 2025                                             BYTECOPY(1)
