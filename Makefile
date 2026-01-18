@@ -17,7 +17,7 @@ $(BIN)/$(OUT): $(IN)
 .PHONY: man clean
 
 man:
-	COLUMNS=128 man --nh --nj -M doc $(OUT) > doc/$(OUT).man.txt
+	COLUMNS=128 man --nh --nj -M doc $(OUT) > doc/$(OUT).1.txt
 
 clean:
 	rm -f $(BIN)/*

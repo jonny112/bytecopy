@@ -7,7 +7,7 @@ bytecopy [OPTION]... START [END]
 bytecopy [OPTION]... START [+LENGTH]
 bytecopy [OPTION]... [+LENGTH]
 ```
-See [manpage](doc/bytecopy.man.txt) for full documentation or invoke with -h for options summary.
+See [manpage](doc/bytecopy.1.txt) for full documentation or invoke with -h for options summary.
 
 ## Examples
 

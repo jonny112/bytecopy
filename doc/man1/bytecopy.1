@@ -1,4 +1,4 @@
-.TH BYTECOPY 1 "September 2025" UNIX "User Commands"
+.TH BYTECOPY 1 "January 2026" UNIX "User Commands"
 .SH NAME
 bytecopy \- copy bytes between files
 .SH SYNOPSIS
@@ -149,13 +149,10 @@ Skip input instead of seeking. That is, read and discard as many bytes from the 
 This should only be used if the input is not seekable and the data cannot be accessed by other means.
 .TP
 .B \-S
-Synchronize storage after each write. Requests that all data be written/flushed to the storage immediately instead of being buffered by the operating system.
-This is useful to minimize cache usage and improve progress monitoring when copying from a fast to a slow storage.
-A removable device (which is neither mounted nor used by any other process!) may be detached directly after the copy process ends without losing data.
+Synchronize storage after each write. Requests that all data be immediately written (flushed) to the storage instead of being buffered by the operating system. This is useful to minimize cache usage and improve progress monitoring, especially when copying from a fast to a slow storage.
+When writing directly to a removable device using this mode, it may be detached right after the copy process ends without losing data, as long as no parts of it are mounted or used by any other process.
 .br
-This option will increase system load due to additional syscalls and slightly decrease the overall copy speed. Using larger buffers (-b) may mitigate this effect.
-.br
-Whenever possible consider using -o with -y or -Y instead.
+This option requires an additional syscall to be made after each write. For better performance consider using larger buffers (-b) and whenever possible use -o with -y or -Y instead.
 .TP
 .B \-t
 Truncate the output file if it already exists, upon opening with -o.
@@ -199,14 +196,20 @@ Open FILE for reading the index array. This overrides -X.
 Read the index array from file descriptor FD instead of the default 3.
 .TP
 .B \-y
-Open the output file in data synchronized mode, when using -o.
+Open the output file in data synchronized mode, when -o is used.
 .br
-This instructs the operating system not to buffer written data but flush it directly to the storage. Some file metadata, such as the modification timestamp may not be updated immediately. See also -S and -Y.
+Request data only synchronization after each write, in case -S was specified.
+.br
+This should perform better than -Y, while some file metadata, such as the modification timestamp, may not be updated immediately.
+.br
+Options -y and -Y either modify the behavior of -S (if it was specified before them) or the mode in which the file is opened by -o when -S is not used. Using -o with -S is possible but not recommended.
 .TP
 .B \-Y
-Open the output file in fully synchronized mode, when using -o.
+Open the output file in fully synchronized mode, when -o is used.
 .br
-This is like -y but also synchronizes all file metadata immediately.
+Request full synchronization after each write, if -S was specified, for which this is the default.
+.br
+This is like -y but requires all file metadata to be updated immediately.
 .TP
 .B \-z
 Do not automatically seek to the end of the output file.
