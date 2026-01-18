@@ -203,40 +203,49 @@ void printUsage() {
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
-        "    -a OFFSET   adjust buffer size for initial cycle by OFFSET (number or r: input, w: output)\n"
-        "    -b SIZE     buffer up to SIZE bytes per read/write cycle (default: 512K)\n"
-        "    -B          force buffering, do not write after partial read\n"
-        "    -e          write final buffer even if empty\n"
-        "    -E          do not consider premature end of input an error\n"
-        "    -h          print this help and exit\n"
-        "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
-        "    -I FD       read from the specified file descriptor (default: standard input)\n"
-        "    -n          print each progress report on a new line\n"
-        "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
-        "    -O FD       write to the specified file descriptor (default: standard output)\n"
-        "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
-        "    -P POS      use POS as offset for reading index values\n"
-        "    -q          don't print progress, only status messages to standard error\n"
-        "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
-        "    -s          skip input (read and discard) up to START instead of seeking\n"
-        "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
-        "    -t          truncate (overwrite) output file (only works with -o)\n"
-        "    -T SIZE     truncate or extend length of output file to SIZE, before copying\n"
-        "    -u          assume little-endian byte order for index values\n"
-        "    -U          assume big-endian byte order for index values\n"
-        "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
-        "    -x FILE     open FILE for reading index values (overrides -X)\n"
-        "    -X FD       read index values from the specified file descriptor (default: 3)\n"
-        "    -y          use data synchronized write mode (only works with -o)\n"
-        "    -Y          use fully synchronized write mode (only works with -o)\n"
-        "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
-        "    -Z OFFSET   add OFFSET (may be nagative) to index values and SLICE positions\n"
-        "\n"
         "START, END and POS are zero-based byte offsets from the start of a file.\n"
         "Subtracting END form START yields the total number of bytes to copy.\n"
         "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
         "SLICE calculates START as multiple of LENGTH, thus copying the n-th slice of LENGTH size.\n"
-        
+        "\n"
+        "Input options:\n"
+        "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
+        "    -I FD       read from the specified file descriptor (default: standard input)\n"
+        "    -s          skip input (read and discard) up to START instead of seeking\n"
+        "    -Z OFFSET   add OFFSET (may be negative) to index values and SLICE positions\n"
+        "    -E          do not consider premature end of input an error\n"
+        "\n"
+        "Output options:\n"
+        "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
+        "    -O FD       write to the specified file descriptor (default: standard output)\n"
+        "    -t          truncate (overwrite) output file (only works with -o, default is to append)\n"
+        "    -T SIZE     truncate or extend length of output file to SIZE before copying\n"
+        "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
+        "    -y          flush data to storage on write (prefer over -S when using -o)\n"
+        "    -Y          like -y but also flushes all file metadata each write\n"
+        "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
+        "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
+        "\n"
+        "Buffering:\n"
+        "    -b SIZE     buffer up to SIZE bytes per read/write cycle (default: 512K)\n"
+        "    -B          force buffering, do not write after partial read\n"
+        "    -e          write final buffer even if empty\n"
+        "    -a OFFSET   adjust buffer size for initial cycle by OFFSET (number or r: input, w: output)\n"
+        "\n"
+        "Index handling:\n"
+        "    -x FILE     open FILE for reading index values (overrides -X)\n"
+        "    -X FD       read index values from the specified file descriptor (default: 3)\n"
+        "    -P POS      use POS as offset for reading index values\n"
+        "    -u          assume little-endian byte order for index values\n"
+        "    -U          assume big-endian byte order for index values\n"
+        "\n"
+        "Reporting:\n"
+        "    -q          don't print progress, only status messages to standard error\n"
+        "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
+        "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
+        "    -n          print each progress report on a new line\n"
+        "    -h          print this help and exit\n"
+        "\n"
         "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
         "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
         "Placeholder 'i' refers to the length of the input and 'o' to the initial length of the output."
@@ -258,7 +267,7 @@ void printUsage() {
 int main(int argc, char **argv) {
     int64_t num;
     off64_t pos = 0, offStart = 0, offIdx = 0, offEnd = -1, offWrite = -1;
-    bool bStart = false, bLen = false, bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false;
+    bool bStart = false, bLen = false, bSeekStart = true, bStatus = true, bProgLF = false, bFlushEach = true, bIgnEnd = false, bWrEmpty = false, bSync = false, bSyncData = false;
     int opt, flagsOut = 0, bufferLen = BUFFER_DEFAULT, blockSize = 0, bufferPos, rd, wr, rq;
     char *pathIn = NULL, *pathOut = NULL, *pathRes = NULL, *strAlign = NULL;
     struct ioStatus io = {0, 0, 0, 0, -1, -1, -1, 0, STDIN_FILENO, STDOUT_FILENO, FD_IDX_DEFAULT, 0, 0};
@@ -343,6 +352,10 @@ int main(int argc, char **argv) {
             bSeekStart = false;
         } else if (opt == 'S') {
             // sync after write
+            if (flagsOut & (O_SYNC | O_DSYNC)) {
+                msg("No point in using -S after -y or -Y has been specified.\n");
+                return EXIT_FAILURE;
+            }
             bSync = true;
         } else if (opt == 't') {
             // truncate output on open
@@ -371,10 +384,10 @@ int main(int argc, char **argv) {
             io.fdIdx = atoi(optarg);
         } else if (opt == 'y') {
             // data synchronized output
-            flagsOut |= O_DSYNC;
+            if (bSync) bSyncData = true; else flagsOut |= O_DSYNC;
         } else if (opt == 'Y') {
             // fully synchronized output
-            flagsOut |= O_SYNC;
+            if (bSync) bSyncData = false; else flagsOut |= O_SYNC;
         } else if (opt == 'z') {
             // don't seek in output
             optOutSeek.idx = -1;
@@ -399,8 +412,11 @@ int main(int argc, char **argv) {
     }
 
     if (pathOut == NULL) {
-        if (flagsOut) {
-            msg("Options -t, -y and -Y can only be used in combination with -o.\n");
+        if (flagsOut & (O_SYNC | O_DSYNC)) {
+            msg("Options -y and -Y can only be used in combination with -o or -S.\n");
+            return EXIT_FAILURE;
+        } if (flagsOut) {
+            msg("Option -t can only be used in combination with -o.\n");
             return EXIT_FAILURE;
         }
     } else flagsOut |= O_WRONLY | O_CREAT;
@@ -594,7 +610,7 @@ int main(int argc, char **argv) {
                 rq = bufferPos - num;
                 if (rq > 0 || bWrEmpty) {
                     wr = write(io.fdOut, io.buffer + num, rq);
-                    if (bSync && wr != -1 && fsync(io.fdOut) == -1) msgerr("sync failed");
+                    if (bSync && wr != -1 && (bSyncData ? fdatasync(io.fdOut) : fsync(io.fdOut)) == -1) msgerr("sync failed");
                     io.wr++;
                 } else wr = 0;
                 if (wr < 0 || wr != rq) break;
