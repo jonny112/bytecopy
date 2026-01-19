@@ -5,7 +5,7 @@ Copy byte segments of arbitrary size from one file or device to another or betwe
 ```sh
 bytecopy [OPTION]... START [END]
 bytecopy [OPTION]... START [+LENGTH]
-bytecopy [OPTION]... [+LENGTH [SLICE]]
+bytecopy [OPTION]... +LENGTH [SLICE]
 ```
 See [manpage](doc/bytecopy.1.txt) for full documentation or invoke with -h for options summary.
 
@@ -38,7 +38,7 @@ xzcat disk.img.xz | bytecopy -Eyzo /dev/sdX +o
 
 ## Installation
 
-This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile. It merely uses standard functions, no additional libraries are needed.
+This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile, no additional libraries are required.
 
 ## Bugs
 
