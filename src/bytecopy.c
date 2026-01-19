@@ -195,73 +195,79 @@ int errArg(int n) {
     return EXIT_FAILURE;
 }
 
-void printUsage() {
+void printUsage(bool brief) {
     fprintf(stderr,
         "Usage: bytecopy [OPTION]... START [END]\n"
         "       bytecopy [OPTION]... START [+LENGTH]\n"
-        "       bytecopy [OPTION]... [+LENGTH [SLICE]]\n"
+        "       bytecopy [OPTION]... +LENGTH [SLICE]\n"
         "Copy bytes from input, beginning at START up to END\n"
         "or for LENGTH or till the end of input, to output.\n"
         "\n"
-        "START, END and POS are zero-based byte offsets from the start of a file.\n"
-        "Subtracting END form START yields the total number of bytes to copy.\n"
-        "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
-        "SLICE calculates START as multiple of LENGTH, thus copying the n-th slice of LENGTH size.\n"
-        "\n"
-        "Input options:\n"
-        "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
-        "    -I FD       read from the specified file descriptor (default: standard input)\n"
-        "    -s          skip input (read and discard) up to START instead of seeking\n"
-        "    -Z OFFSET   add OFFSET (may be negative) to index values and SLICE positions\n"
-        "    -E          do not consider premature end of input an error\n"
-        "\n"
-        "Output options:\n"
-        "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
-        "    -O FD       write to the specified file descriptor (default: standard output)\n"
-        "    -t          truncate (overwrite) output file (only works with -o, default is to append)\n"
-        "    -T SIZE     truncate or extend length of output file to SIZE before copying\n"
-        "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
-        "    -y          flush data to storage on write (prefer over -S when using -o)\n"
-        "    -Y          like -y but also flushes all file metadata each write\n"
-        "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
-        "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
-        "\n"
-        "Buffering:\n"
-        "    -b SIZE     buffer up to SIZE bytes per read/write cycle (default: 512K)\n"
-        "    -B          force buffering, do not write after partial read\n"
-        "    -e          write final buffer even if empty\n"
-        "    -a OFFSET   adjust buffer size for initial cycle by OFFSET (number or r: input, w: output)\n"
-        "\n"
-        "Index handling:\n"
-        "    -x FILE     open FILE for reading index values (overrides -X)\n"
-        "    -X FD       read index values from the specified file descriptor (default: 3)\n"
-        "    -P POS      use POS as offset for reading index values\n"
-        "    -u          assume little-endian byte order for index values\n"
-        "    -U          assume big-endian byte order for index values\n"
-        "\n"
-        "Reporting:\n"
-        "    -q          don't print progress, only status messages to standard error\n"
-        "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
-        "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
-        "    -n          print each progress report on a new line\n"
-        "    -h          print this help and exit\n"
-        "\n"
-        "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
-        "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
-        "Placeholder 'i' refers to the length of the input and 'o' to the initial length of the output."
-        "\n"
-        "Values may be specified as decimal or, prefixed with 0 as octal or, prefixed with 0x as hexadecimal.\n"
-        "The suffixes K, M, G may be used to multiply a value by 1024, 1024^2 or 1024^3 respectively.\n"
-        "\n"
-        "Values for START and END may be read from an index, an array of 64-bit integers\n"
-        "which are addressed using their zero-based position prefixed with ':' or '*'.\n"
-        "As a shorthand, the range between two adjacent index values may be specified\n"
-        "by passing the zero-based position of the range prefixed with '^' as START,\n"
-        "where the first range is from the beginning of the input to the first index value\n"
-        "and the last range is from the last index value to the end of input.\n"
-        "\n"
-        "See man page bytecopy(1) for more details.\n"
     );
+    if (brief) {
+        fprintf(stderr, "Use -h or --help to list options.\n");
+    } else {
+        fprintf(stderr,
+            "START, END and POS are zero-based byte offsets from the start of a file.\n"
+            "Subtracting END form START yields the total number of bytes to copy.\n"
+            "LENGTH specifies the number of bytes to copy. It is added to START to obtain END.\n"
+            "SLICE calculates START as multiple of LENGTH, thus copying the n-th slice of LENGTH size.\n"
+            "\n"
+            "Input options:\n"
+            "    -i FILE     open FILE for input, instead of reading from standard input (overrides -I)\n"
+            "    -I FD       read from the specified file descriptor (default: standard input)\n"
+            "    -s          skip input (read and discard) up to START instead of seeking\n"
+            "    -Z OFFSET   add OFFSET (may be negative) to index values and SLICE positions\n"
+            "    -E          do not consider premature end of input an error\n"
+            "\n"
+            "Output options:\n"
+            "    -o FILE     open FILE for output, instead of writing to standard output (overrides -O)\n"
+            "    -O FD       write to the specified file descriptor (default: standard output)\n"
+            "    -t          truncate (overwrite) output file (only works with -o, default is to append)\n"
+            "    -T SIZE     truncate or extend length of output file to SIZE before copying\n"
+            "    -S          synchronize storage (flush to device) after each write (see -y and -Y)\n"
+            "    -y          flush data to storage on write (prefer over -S when using -o)\n"
+            "    -Y          like -y but also flushes all file metadata each write\n"
+            "    -w POS      seek to POS in output before writing (you will need to use -o or 1<> with this)\n"
+            "    -z          don't seek to end of output file (alias for -w '-', default when not using -o)\n"
+            "\n"
+            "Buffering:\n"
+            "    -b SIZE     buffer up to SIZE bytes per read/write cycle (default: 512K)\n"
+            "    -B          force buffering, do not write after partial read\n"
+            "    -e          write final buffer even if empty\n"
+            "    -a OFFSET   adjust buffer size for initial cycle by OFFSET (number or r: input, w: output)\n"
+            "\n"
+            "Index handling:\n"
+            "    -x FILE     open FILE for reading index values (overrides -X)\n"
+            "    -X FD       read index values from the specified file descriptor (default: 3)\n"
+            "    -P POS      use POS as offset for reading index values\n"
+            "    -u          assume little-endian byte order for index values\n"
+            "    -U          assume big-endian byte order for index values\n"
+            "\n"
+            "Reporting:\n"
+            "    -q          don't print progress, only status messages to standard error\n"
+            "    -Q          print no status, only errors to standard error (implies -q unless -p)\n"
+            "    -p          print progress but no status messages (implies -Q, overrides -q)\n"
+            "    -n          print each progress report on a new line\n"
+            "    -h          print this help and exit\n"
+            "\n"
+            "If END is omitted or '-' is passed, copying will continue until the end of input.\n"
+            "If START is omitted or '-' is passed, no seek operation on the input will be performed.\n"
+            "Placeholder 'i' refers to the length of the input and 'o' to the initial length of the output."
+            "\n"
+            "Values may be specified as decimal or, prefixed with 0 as octal or, prefixed with 0x as hexadecimal.\n"
+            "The suffixes K, M, G may be used to multiply a value by 1024, 1024^2 or 1024^3 respectively.\n"
+            "\n"
+            "Values for START and END may be read from an index, an array of 64-bit integers\n"
+            "which are addressed using their zero-based position prefixed with ':' or '*'.\n"
+            "As a shorthand, the range between two adjacent index values may be specified\n"
+            "by passing the zero-based position of the range prefixed with '^' as START,\n"
+            "where the first range is from the beginning of the input to the first index value\n"
+            "and the last range is from the last index value to the end of input.\n"
+            "\n"
+        );
+    }
+    fprintf(stderr, "See man page bytecopy(1) for more details.\n");
 }
 
 int main(int argc, char **argv) {
@@ -286,7 +292,7 @@ int main(int argc, char **argv) {
                 msg("-h/--help cannot be combined with other options\n");
                 return EXIT_FAILURE;
             }
-            printUsage();
+            printUsage(false);
             return EXIT_SUCCESS;
         } else if (opt == 'a') {
             // align buffer
@@ -421,6 +427,12 @@ int main(int argc, char **argv) {
         }
     } else flagsOut |= O_WRONLY | O_CREAT;
 
+    if (argc <= optind) {
+        msg("missing argument\n");
+        printUsage(true);
+        return EXIT_FAILURE;
+    }
+
     if (pathRes != NULL) {
         // open index file
         if ((io.fdIdx = open(pathRes, O_RDONLY)) == -1) {
@@ -459,60 +471,58 @@ int main(int argc, char **argv) {
     }
 
     // parse range
-    if (argc > optind) {
-        if (argv[optind][0] == '^') {
-            // range from index
-            if (parseNum(&argv[optind][1], &num)) return errArg(optind);
-            // start
-            if (num > 0) if (readIdx(&io, &offIdx, num - 1, &offStart)) return errArg(optind);
-            // end
-            if (readIdx(&io, &offIdx, num, &offEnd)) return errArg(optind);
+    if (argv[optind][0] == '^') {
+        // range from index
+        if (parseNum(&argv[optind][1], &num)) return errArg(optind);
+        // start
+        if (num > 0) if (readIdx(&io, &offIdx, num - 1, &offStart)) return errArg(optind);
+        // end
+        if (readIdx(&io, &offIdx, num, &offEnd)) return errArg(optind);
+    } else {
+        num = 0;
+
+        // start
+        if (argv[optind][0] == '+') {
+            optind--;
         } else {
-            num = 0;
-
-            // start
-            if (argv[optind][0] == '+') {
-                optind--;
-            } else {
-                bStart = true;
-                if (!strIsChar(argv[optind], '-')) {
-                    if (argv[optind][0] == '*' || argv[optind][0] == ':') {
-                        // from index
-                        if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return errArg(optind);
-                        if (argv[optind][1] == '\0') num = 1;
-                    } else {
-                        // direct or relative to end
-                        if (parseOffset(argv[optind], &offStart, &io)) return errArg(optind);
-                    }
-                } else bSeekStart = false;
-            }
-
-            // end
-            if (argc > ++optind && !strIsChar(argv[optind], '-')) {
-                if (argv[optind][0] == '+') {
-                    // offset
-                    if (parseOffset(&argv[optind][1], &offEnd, &io)) return errArg(optind);
-                    offEnd += offStart;
-                    bLen = !bStart;
+            bStart = true;
+            if (!strIsChar(argv[optind], '-')) {
+                if (argv[optind][0] == '*' || argv[optind][0] == ':') {
+                    // from index
+                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offStart)) return errArg(optind);
+                    if (argv[optind][1] == '\0') num = 1;
                 } else {
-                    if (argv[optind][0] == '*' || argv[optind][0] == ':') {
-                        // from index
-                        if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return errArg(optind);
-                    } else {
-                        // direct or relative to end
-                        if (parseOffset(argv[optind], &offEnd, &io)) return errArg(optind);
-                    }
+                    // direct or relative to end
+                    if (parseOffset(argv[optind], &offStart, &io)) return errArg(optind);
+                }
+            } else bSeekStart = false;
+        }
+
+        // end
+        if (argc > ++optind && !strIsChar(argv[optind], '-')) {
+            if (argv[optind][0] == '+') {
+                // offset
+                if (parseOffset(&argv[optind][1], &offEnd, &io)) return errArg(optind);
+                offEnd += offStart;
+                bLen = !bStart;
+            } else {
+                if (argv[optind][0] == '*' || argv[optind][0] == ':') {
+                    // from index
+                    if (readIdxStr(&io, &offIdx, &argv[optind][1], &num, &offEnd)) return errArg(optind);
+                } else {
+                    // direct or relative to end
+                    if (parseOffset(argv[optind], &offEnd, &io)) return errArg(optind);
                 }
             }
-
-            // slice
-            if (bLen && argc > ++optind) {
-                if (parseNum(argv[optind], &num)) return errArg(optind);
-                offStart = num * offEnd + io.offsetIn;
-                offEnd += offStart;
-            } else bSeekStart &= bStart;
         }
-    } else bSeekStart = false;
+
+        // slice
+        if (bLen && argc > ++optind && !strIsChar(argv[optind], '-')) {
+            if (parseNum(argv[optind], &num)) return errArg(optind);
+            offStart = num * offEnd + io.offsetIn;
+            offEnd += offStart;
+        } else bSeekStart &= bStart;
+    }
 
     if (pathRes != NULL) close(io.fdIdx);
 

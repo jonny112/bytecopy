@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
        bytecopy [OPTION]... START [END]
        bytecopy [OPTION]... START [+LENGTH]
-       bytecopy [OPTION]... [+LENGTH [SLICE]]
+       bytecopy [OPTION]... +LENGTH [SLICE]
 
 DESCRIPTION
        Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
@@ -27,8 +27,8 @@ DESCRIPTION
        corresponding value for END is obtained by adding LENGTH to START.
        SLICE calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied.
 
+       Passing a '-' (dash) in place of START, END or SLICE is equivalent to omitting them.
        When START is omitted, END is equivalent to LENGTH.
-       Passing a '-' (dash) in place of START or END is equivalent to omitting them.
 
        Numbers (N) may be specified as
 

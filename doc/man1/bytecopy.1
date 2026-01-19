@@ -9,7 +9,7 @@ bytecopy \- copy bytes between files
 [\fIOPTION\fR]... \fISTART\fR [+\fILENGTH\fR]
 .br
 .B bytecopy
-[\fIOPTION\fR]... [+\fILENGTH\fR [\fISLICE\fR]]
+[\fIOPTION\fR]... +\fILENGTH\fR [\fISLICE\fR]
 .SH DESCRIPTION
 Copy an arbitrary range of bytes from one file to another or between different locations in the same file.
 .br
@@ -32,9 +32,9 @@ Subtracting END form START yields the total number of bytes to copy. END may be 
 .br
 \fISLICE\fR calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied.
 .PP
-When START is omitted, END is equivalent to LENGTH.
+Passing a '-' (dash) in place of START, END or SLICE is equivalent to omitting them.
 .br
-Passing a '-' (dash) in place of START or END is equivalent to omitting them.
+When START is omitted, END is equivalent to LENGTH.
 .PP
 Numbers (N) may be specified as
 .IP
