@@ -2,7 +2,7 @@
  * bytecopy
  * GPL-3.0 License
  * 
- * J. Schmitz, 2009-2025
+ * J. Schmitz, 2009-2026
  * 
  */
 

@@ -38,7 +38,7 @@ xzcat disk.img.xz | bytecopy -Eyzo /dev/sdX +o
 
 ## Installation
 
-This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile, no additional libraries are required.
+This program should compile in any POSIX compatible gcc/glibc environment using the included Makefile, no additional libraries are needed.
 
 ## Bugs
 
