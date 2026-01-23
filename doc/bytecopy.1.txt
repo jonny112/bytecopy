@@ -14,7 +14,7 @@ DESCRIPTION
        The files as well as the range to copy can be of any size within operating system and file system limits.
 
        START is the zero-based offset of the first byte to copy, counted from the beginning of the input file.
-       If not specified, no initial seek operation is performed on the input (see also -s).
+       If not specified, no initial seek operation is performed on the input. See also -s.
 
        END is the zero-based offset at which copying shall end (the first byte not to be copied) counted from the beginning of
        the input file.  To include the last byte this number has to be equal to the total number of bytes in the file.
@@ -25,7 +25,8 @@ DESCRIPTION
 
        LENGTH is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the
        corresponding value for END is obtained by adding LENGTH to START.
-       SLICE calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied.
+       SLICE calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied. An
+       offset may be specified using -Z.
 
        Passing a '-' (dash) in place of START, END or SLICE is equivalent to omitting them.
        When START is omitted, END is equivalent to LENGTH.
@@ -58,7 +59,7 @@ DESCRIPTION
 
        To use an offset value from the index, specify its zero-based array position prefixed with a ':' (colon) or an '*'
        (asterisk) for START or END.  A ':' or '*' that is not followed by any number will read the next value from whatever the
-       current position of the index file is. This allows to read offset values from non-seekable resources.
+       current position in the index file is. This allows to read offset values from non-seekable sources.
 
        As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a
        '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
@@ -73,13 +74,13 @@ OPTIONS
               boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle
               may be added for the adjustment.
               If OFFSET is a positive number it specifies the immediate length of the initial cycle. A negative number reduces
-              the length of the initial cycle. The cycle length is bounded by the buffer size and rotates within this boundary
-              in case OFFSET should be larger.
+              the length of the initial cycle by the specified amount. The cycle length is always bounded by the buffer size
+              and rotates within this boundary in case OFFSET should be larger.
               OFFSET may be one of the placeholders 'r' for the reading offset (START) or 'w' for the writing offset (position
-              after the initial seek operation, see -o, and -w), each inverted, so the length of the initial cycle will be
+              after the initial seek operation, see -w and -o), each inverted, so the length of the initial cycle will be
               reduced by the remainder of that offset divided by the buffer size.
-              In certain cases -B will have to be used for this option to be effective.
               This option has no effect in case it references an offset that is not specified or 0.
+              If partial reads may occur -B will have to be specified to maintain the alignment.
 
        -b SIZE
               Set the maximum number of bytes to be buffered during one read/write cycle.
@@ -88,11 +89,11 @@ OPTIONS
 
        -B     Always fill the entire buffer before writing, unless END or the end of input have been reached.
               Normally, if a single read operation does not fill the buffer completely, whatever has been read will be output
-              immediately.  Partial reads may occur when reading from network resources or terminals but usually are of no
-              concern for regular files and local storage devices.
+              immediately.  Partial reads may occur when reading from sockets or terminals but usually are of no concern with
+              regular files and local storage devices.
 
-       -e     Write the final buffer even if it is empty. That is, perform a write operation even if the byte count is zero.
-              The effect of this, if any, depends on the underlying device and its configuration/implementation.
+       -e     Write the final buffer even if it is empty. This will perform a write operation even if the byte count is zero.
+              The effect of this, if any, depends on the implementation and configuration of the underlying device.
 
        -E     In case the number of bytes to copy is specified (END or LENGTH given), do not consider a premature end of input
               an error.  By default, an error is reported if not all bytes could be read.
@@ -129,26 +130,26 @@ OPTIONS
 
        -s     Skip input instead of seeking. That is, read and discard as many bytes from the input as necessary to reach START
               instead of directly seeking to that position.
-              This should only be used if the input is not seekable and the data cannot be accessed by other means.
+              This option should only be used if the input is not seekable and access is not possible through other means.
 
        -S     Synchronize storage after each write. Requests that all data be immediately written (flushed) to the storage
               instead of being buffered by the operating system. This is useful to minimize cache usage and improve progress
               monitoring, especially when copying from a fast to a slow storage.  When writing directly to a removable device
-              using this mode, it may be detached right after the copy process ends without losing data, as long as no parts of
-              it are mounted or used by any other process.
+              using this mode, it may be detached right after the copy process has ended without losing data, as long as no
+              parts of it are mounted or used by any other process.
               This option requires an additional syscall to be made after each write. For better performance consider using
               larger buffers (-b) and whenever possible use -o with -y or -Y instead.
 
        -t     Truncate the output file if it already exists, upon opening with -o.
               All data in the file will be discarded and the file size will be set to zero.
               Writing will begin at the start of the file, even if its size is increased again with -T, unless -w is used.
-              For special/device files this will have no effect other than writing starting at the beginning.
+              For certain special and device files this will have no effect other than writing starting at the beginning.
 
        -T SIZE
               Set the length of the output file to SIZE before copying. This may shirk or grow the file.
               Existing data within the new range will be preserved unless -t is also used.
-              Resizing does not reposition the file's write pointer, whether it lies within the new range or not.
               When using -o without -t, -w or -z, writing will start at the end of the resized file.
+              Resizing alone does not reposition the file's write pointer, whether it lies within the new range or not.
               Note that placeholder 'o' in the argument to -w will refer to the new file size, while for all other arguments it
               refers to the original size.
 
@@ -160,7 +161,7 @@ OPTIONS
               counted from the beginning of the output file.
               Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the
               file regardless of a previous seek. So, for this option to work correctly you need to either open the output file
-              using -o or open a file descriptor at the shell level in read/write mode (like 1<>output.file).
+              using -o or open a file descriptor at the shell in read/write mode (e.g. 1<>'output.file').
               Seeking to a position beyond the end of a regular file is legit and the gap will be filled with zero-bytes upon
               first write. Advanced file systems are able to accomplish this logically without using up physical disk space
               until something is actually written to the gap.
