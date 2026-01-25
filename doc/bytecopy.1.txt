@@ -62,7 +62,7 @@ DESCRIPTION
        current position in the index file is. This allows to read offset values from non-seekable sources.
 
        As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a
-       '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
+       '^' (caret) may be passed in place of START, making it redundant to specify END or LENGTH.
        Range positions are derived as follows (example for an index with three entries):
 
               <start of input> ^0 <first offset = :0> ^1 <second offset = :1> ^2 <third offset = :2> ^3 <end of input>
@@ -72,7 +72,7 @@ OPTIONS
               Adjust the length of the first read/write cycle by OFFSET. If the starting offset for the copy operation is not
               an even multiple of the buffer size (see -b) this can be used to align subsequent cycles with a certain block
               boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle
-              may be added for the adjustment.
+              may be neccessary for the adjustment.
               If OFFSET is a positive number it specifies the immediate length of the initial cycle. A negative number reduces
               the length of the initial cycle by the specified amount. The cycle length is always bounded by the buffer size
               and rotates within this boundary in case OFFSET should be larger.
@@ -140,9 +140,9 @@ OPTIONS
               This option requires an additional syscall to be made after each write. For better performance consider using
               larger buffers (-b) and whenever possible use -o with -y or -Y instead.
 
-       -t     Truncate the output file if it already exists, upon opening with -o.
+       -t     Truncate the output file if it already exists upon opening with -o.
               All data in the file will be discarded and the file size will be set to zero.
-              Writing will begin at the start of the file, even if its size is increased again with -T, unless -w is used.
+              Writing will start at the begining of the file, even if its size is increased again with -T, unless -w is used.
               For certain special and device files this will have no effect other than writing starting at the beginning.
 
        -T SIZE
@@ -157,7 +157,7 @@ OPTIONS
 
        -U     Assume values in the index file are big-endian and convert them if the local native byte order differs.
 
-       -w POS Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write,
+       -w POS Seek to POS in output before writing starts. Where POS is the zero-based offset of the first byte to (over)write,
               counted from the beginning of the output file.
               Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the
               file regardless of a previous seek. So, for this option to work correctly you need to either open the output file
@@ -187,7 +187,8 @@ OPTIONS
               This is equivalent to passing '-' to -w and the default when not using -o.
 
        -Z OFFSET
-              Add OFFSET to all values read from the index and positions determined by SLICE. This may be positive or negative.
+              Add OFFSET to all values read from the index and positions determined by SLICE.
+              This may be either a positive or a negative value.
 
 EXAMPLES
        Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:

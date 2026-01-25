@@ -65,7 +65,7 @@ Values from the index file are read as-is, by default, that is, assumed to be in
 To use an offset value from the index, specify its zero-based array position prefixed with a ':' (colon) or an '*' (asterisk) for START or END.
 A ':' or '*' that is not followed by any number will read the next value from whatever the current position in the index file is. This allows to read offset values from non-seekable sources.
 .PP
-As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a '^' (caret) may be passed for START, making it redundant to specify END or LENGTH.
+As a shorthand for extracting the range bounded by two adjacent index entries, the position of the range prefixed with a '^' (caret) may be passed in place of START, making it redundant to specify END or LENGTH.
 .br
 Range positions are derived as follows (example for an index with three entries):
 .IP
@@ -73,7 +73,7 @@ Range positions are derived as follows (example for an index with three entries)
 .SH OPTIONS
 .TP
 .B \-a \fIOFFSET
-Adjust the length of the first read/write cycle by OFFSET. If the starting offset for the copy operation is not an even multiple of the buffer size (see -b) this can be used to align subsequent cycles with a certain block boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle may be added for the adjustment.
+Adjust the length of the first read/write cycle by OFFSET. If the starting offset for the copy operation is not an even multiple of the buffer size (see -b) this can be used to align subsequent cycles with a certain block boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle may be neccessary for the adjustment.
 .br
 If OFFSET is a positive number it specifies the immediate length of the initial cycle. A negative number reduces the length of the initial cycle by the specified amount. The cycle length is always bounded by the buffer size and rotates within this boundary in case OFFSET should be larger.
 .br
@@ -155,11 +155,11 @@ When writing directly to a removable device using this mode, it may be detached 
 This option requires an additional syscall to be made after each write. For better performance consider using larger buffers (-b) and whenever possible use -o with -y or -Y instead.
 .TP
 .B \-t
-Truncate the output file if it already exists, upon opening with -o.
+Truncate the output file if it already exists upon opening with -o.
 .br
 All data in the file will be discarded and the file size will be set to zero.
 .br
-Writing will begin at the start of the file, even if its size is increased again with -T, unless -w is used.
+Writing will start at the begining of the file, even if its size is increased again with -T, unless -w is used.
 .br
 For certain special and device files this will have no effect other than writing starting at the beginning.
 .TP
@@ -181,7 +181,7 @@ Assume values in the index file are little-endian and convert them if the local 
 Assume values in the index file are big-endian and convert them if the local native byte order differs.
 .TP
 .B \-w \fIPOS
-Seek to POS in output before writing. Where POS is the zero-based offset of the first byte to (over)write, counted from the beginning of the output file.
+Seek to POS in output before writing starts. Where POS is the zero-based offset of the first byte to (over)write, counted from the beginning of the output file.
 .br
 Note that if a file descriptor has been opened in append mode any write operation will commence at the end of the file regardless of a previous seek. So, for this option to work correctly you need to either open the output file using -o or open a file descriptor at the shell in read/write mode (e.g. 1<>'output.file').
 .br
@@ -217,7 +217,9 @@ Do not automatically seek to the end of the output file.
 This is equivalent to passing '-' to -w and the default when not using -o.
 .TP
 .B \-Z \fIOFFSET
-Add OFFSET to all values read from the index and positions determined by SLICE. This may be positive or negative.
+Add OFFSET to all values read from the index and positions determined by SLICE.
+.br
+This may be either a positive or a negative value.
 .SH EXAMPLES
 Extract a section of 300 bytes from the input file, starting at offset 1000, to a new file:
 .IP
