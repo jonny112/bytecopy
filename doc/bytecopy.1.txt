@@ -25,6 +25,7 @@ DESCRIPTION
 
        LENGTH is the number of bytes to copy, prefixed with a '+' (plus sign). This may be specified instead of END, while the
        corresponding value for END is obtained by adding LENGTH to START.
+
        SLICE calculates START as multiple of LENGTH, so the the n-th slice of LENGTH size in the input file will be copied. An
        offset may be specified using -Z.
 
@@ -72,7 +73,7 @@ OPTIONS
               Adjust the length of the first read/write cycle by OFFSET. If the starting offset for the copy operation is not
               an even multiple of the buffer size (see -b) this can be used to align subsequent cycles with a certain block
               boundary. The position and amount of the bytes being copied remain unchanged but an additional read/write cycle
-              may be neccessary for the adjustment.
+              may be necessary for the adjustment.
               If OFFSET is a positive number it specifies the immediate length of the initial cycle. A negative number reduces
               the length of the initial cycle by the specified amount. The cycle length is always bounded by the buffer size
               and rotates within this boundary in case OFFSET should be larger.
@@ -105,8 +106,14 @@ OPTIONS
 
        -I FD  Read input from file descriptor FD instead of the standard input.
 
-       -n     Print each progress report on a new line. A new progress report (unless disabled with -q or -Q) is printed after
-              each read/write cycle and by default overwrites the previous one.
+       -n     Print each progress report on a new line. By default, the progress report printed after each read/write cycle
+              overwrites the previous one.
+              This enables progress reporting even if standard error is not a terminal or if -q or -Q was specified before.
+              Disables narrow terminal mode unless -N is specified after.
+
+       -N     Enable narrow terminal mode. Report status and progress using more, but shorter lines. Has no effect if reporting
+              is turned off.
+              This is the default if standard error is a terminal with 100 columns or less. See also -n, -p -q, -Q.
 
        -o FILE
               Open FILE for writing and use it as output instead of the standard output. This overrides -O.
@@ -125,6 +132,7 @@ OPTIONS
 
        -q     Be quiet. Do not report progress.
               By default, statistics are printed to standard error after each read/write cycle.
+              If standard error is not a terminal, progress reporting is disabled unless -p or -n is specified.
 
        -Q     Be more quiet. Do not print any progress or status messages, only errors, to standard error.
 
@@ -142,7 +150,7 @@ OPTIONS
 
        -t     Truncate the output file if it already exists upon opening with -o.
               All data in the file will be discarded and the file size will be set to zero.
-              Writing will start at the begining of the file, even if its size is increased again with -T, unless -w is used.
+              Writing will start at the beginning of the file, even if its size is increased again with -T, unless -w is used.
               For certain special and device files this will have no effect other than writing starting at the beginning.
 
        -T SIZE
@@ -264,4 +272,4 @@ AUTHOR
 SOURCE
        git://github.com/jonny112/bytecopy.git
 
-UNIX                                                      January 2026                                              BYTECOPY(1)
+UNIX                                                       March 2026                                               BYTECOPY(1)
